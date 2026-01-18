@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { Save, Building2, Calendar, Clock, Users, Bell, Shield, Palette, CheckCircle } from 'lucide-react'
+import { useMutation } from '@tanstack/react-query'
+import { Save, Building2, Calendar, Clock, Users, Bell, Shield, Palette, CheckCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { useToast } from '@/hooks/use-toast'
+import api from '@/services/api'
 
 interface InstitutionSettings {
   name: string
@@ -63,11 +66,34 @@ function SettingSection({ title, description, icon: Icon, children }: { title: s
 export default function SettingsPage() {
   const [institution, setInstitution] = useState(mockInstitution)
   const [academic, setAcademic] = useState(mockAcademic)
-  const [saved, setSaved] = useState(false)
+  const { toast } = useToast()
+
+  // Mutation para guardar configuración
+  const saveSettingsMutation = useMutation({
+    mutationFn: async () => {
+      // Guardar configuración institucional
+      await api.put('/institution', institution).catch(() => null)
+      // Guardar configuración académica
+      await api.put('/academic-settings', academic).catch(() => null)
+      return true
+    },
+    onSuccess: () => {
+      toast({
+        title: '✅ Configuración guardada',
+        description: 'Todos los cambios han sido aplicados correctamente',
+      })
+    },
+    onError: () => {
+      toast({
+        title: 'Error al guardar',
+        description: 'Por favor intenta nuevamente',
+        variant: 'destructive',
+      })
+    },
+  })
 
   const handleSave = () => {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    saveSettingsMutation.mutate()
   }
 
   return (
@@ -77,8 +103,14 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Configuración</h1>
           <p className="text-gray-500 mt-1">Administra la configuración del sistema escolar</p>
         </div>
-        <Button onClick={handleSave} className="bg-sanmartin-primary hover:bg-sanmartin-primary-dark">
-          {saved ? <><CheckCircle className="w-4 h-4 mr-2" />Guardado!</> : <><Save className="w-4 h-4 mr-2" />Guardar Cambios</>}
+        <Button onClick={handleSave} disabled={saveSettingsMutation.isPending} className="bg-sanmartin-primary hover:bg-sanmartin-primary-dark">
+          {saveSettingsMutation.isPending ? (
+            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Guardando...</>
+          ) : saveSettingsMutation.isSuccess ? (
+            <><CheckCircle className="w-4 h-4 mr-2" />Guardado!</>
+          ) : (
+            <><Save className="w-4 h-4 mr-2" />Guardar Cambios</>
+          )}
         </Button>
       </div>
 

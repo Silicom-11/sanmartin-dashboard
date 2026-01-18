@@ -194,12 +194,16 @@ export default function AttendancePage() {
         const response = await api.get('/attendance', { params: { date: selectedDate } })
         return response.data
       } catch {
-        return { data: mockCourseAttendance }
+        return null
       }
     },
   })
 
-  const courses = (data?.data || mockCourseAttendance).filter((c: CourseAttendance) => 
+  // Asegurar que siempre sea un array
+  const rawData = data?.data?.attendance || data?.data || data?.attendance || []
+  const attendanceData = Array.isArray(rawData) ? rawData : mockCourseAttendance
+  
+  const courses = attendanceData.filter((c: CourseAttendance) => 
     `${c.courseName} ${c.gradeLevel} ${c.teacher}`.toLowerCase().includes(searchTerm.toLowerCase())
   )
 

@@ -178,12 +178,16 @@ export default function GradesPage() {
         const response = await api.get('/grades')
         return response.data
       } catch {
-        return { data: mockCourseGrades }
+        return null
       }
     },
   })
 
-  const courses = (data?.data || mockCourseGrades).filter((c: CourseGrades) => 
+  // Asegurar que siempre sea un array
+  const rawData = data?.data?.grades || data?.data || data?.grades || []
+  const courseData = Array.isArray(rawData) ? rawData : mockCourseGrades
+  
+  const courses = courseData.filter((c: CourseGrades) => 
     `${c.courseName} ${c.gradeLevel} ${c.teacher}`.toLowerCase().includes(searchTerm.toLowerCase())
   )
 

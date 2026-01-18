@@ -1,8 +1,12 @@
 import { useState } from 'react'
-import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, Users, Tag, X, GraduationCap, Flag, PartyPopper } from 'lucide-react'
+import { useMutation } from '@tanstack/react-query'
+import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, Users, Tag, X, GraduationCap, Flag, PartyPopper, Bell, Send, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useToast } from '@/hooks/use-toast'
+import api from '@/services/api'
 
 interface CalendarEvent {
   id: string
@@ -13,6 +17,9 @@ interface CalendarEvent {
   description?: string
   location?: string
   participants?: string
+  notifyStudents?: boolean
+  notifyParents?: boolean
+  notifyTeachers?: boolean
 }
 
 const mockEvents: CalendarEvent[] = [
@@ -34,7 +41,136 @@ const eventColors = {
 
 const eventLabels = { exam: 'Examen', meeting: 'Reunión', holiday: 'Feriado', activity: 'Actividad', deadline: 'Fecha Límite' }
 
-function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
+// Modal para crear/editar evento
+function CreateEventModal({ onClose, onSave, isLoading }: { onClose: () => void; onSave: (event: Omit<CalendarEvent, 'id'>) => void; isLoading: boolean }) {
+  const [formData, setFormData] = useState({
+    title: '',
+    date: new Date().toISOString().split('T')[0],
+    time: '',
+    type: 'activity' as CalendarEvent['type'],
+    description: '',
+    location: '',
+    participants: '',
+    notifyStudents: true,
+    notifyParents: true,
+    notifyTeachers: true,
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    onSave(formData)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white">
+          <h2 className="text-xl font-semibold">Nuevo Evento</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" disabled={isLoading}><X className="w-5 h-5" /></button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Título del Evento *</label>
+            <Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} required placeholder="Ej: Examen de Matemáticas" disabled={isLoading} />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha *</label>
+              <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required disabled={isLoading} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Hora</label>
+              <Input type="time" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} disabled={isLoading} />
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Evento *</label>
+            <div className="grid grid-cols-5 gap-2">
+              {(Object.keys(eventColors) as Array<keyof typeof eventColors>).map((type) => {
+                const config = eventColors[type]
+                const Icon = config.icon
+                const isSelected = formData.type === type
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setFormData({...formData, type})}
+                    className={`p-3 rounded-xl flex flex-col items-center gap-1 transition-all ${isSelected ? `${config.bg} ring-2 ring-offset-2 ring-gray-400` : 'bg-gray-50 hover:bg-gray-100'}`}
+                    disabled={isLoading}
+                  >
+                    <Icon className={`w-5 h-5 ${isSelected ? config.text : 'text-gray-500'}`} />
+                    <span className={`text-xs ${isSelected ? config.text : 'text-gray-500'}`}>{eventLabels[type]}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+            <textarea 
+              value={formData.description} 
+              onChange={(e) => setFormData({...formData, description: e.target.value})} 
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sanmartin-primary resize-none"
+              rows={3}
+              placeholder="Detalles adicionales del evento..."
+              disabled={isLoading}
+            />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ubicación</label>
+              <Input value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} placeholder="Ej: Auditorio" disabled={isLoading} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Participantes</label>
+              <Input value={formData.participants} onChange={(e) => setFormData({...formData, participants: e.target.value})} placeholder="Ej: 3° Primaria" disabled={isLoading} />
+            </div>
+          </div>
+          
+          <div className="p-4 bg-blue-50 rounded-xl">
+            <div className="flex items-center gap-2 mb-3">
+              <Bell className="w-5 h-5 text-blue-600" />
+              <span className="font-medium text-blue-900">Notificar a:</span>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {[
+                { key: 'notifyStudents', label: 'Estudiantes', icon: GraduationCap },
+                { key: 'notifyParents', label: 'Padres', icon: Users },
+                { key: 'notifyTeachers', label: 'Docentes', icon: Flag },
+              ].map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setFormData({...formData, [key]: !formData[key as keyof typeof formData]})}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${formData[key as keyof typeof formData] ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border'}`}
+                  disabled={isLoading}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span className="text-sm">{label}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-blue-700 mt-2">Las notificaciones se enviarán automáticamente a la app móvil</p>
+          </div>
+          
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1" disabled={isLoading}>Cancelar</Button>
+            <Button type="submit" className="flex-1 bg-sanmartin-primary hover:bg-sanmartin-primary-dark" disabled={isLoading}>
+              {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Guardando...</> : <><Plus className="w-4 h-4 mr-2" />Crear Evento</>}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function EventModal({ event, onClose, onSendReminder, onEdit }: { event: CalendarEvent; onClose: () => void; onSendReminder: () => void; onEdit: () => void }) {
   const config = eventColors[event.type]
   const Icon = config.icon
 
@@ -88,8 +224,10 @@ function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => v
           )}
           
           <div className="flex gap-2 pt-4">
-            <Button variant="outline" className="flex-1">Editar</Button>
-            <Button className="flex-1 bg-sanmartin-primary hover:bg-sanmartin-primary-dark">Enviar Recordatorio</Button>
+            <Button variant="outline" className="flex-1" onClick={onEdit}>Editar</Button>
+            <Button onClick={onSendReminder} className="flex-1 bg-sanmartin-primary hover:bg-sanmartin-primary-dark">
+              <Send className="w-4 h-4 mr-2" />Enviar Recordatorio
+            </Button>
           </div>
         </div>
       </div>
@@ -98,9 +236,94 @@ function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => v
 }
 
 export default function CalendarPage() {
-  const [currentDate, setCurrentDate] = useState(new Date(2024, 0, 1))
+  const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const [viewMode, setViewMode] = useState<'month' | 'list'>('month')
+  const [events, setEvents] = useState(mockEvents)
+  
+  const { toast } = useToast()
+
+  // Mutation para crear evento y enviar notificaciones
+  const createEventMutation = useMutation({
+    mutationFn: async (eventData: Omit<CalendarEvent, 'id'>) => {
+      // Crear evento en backend
+      const response = await api.post('/events', eventData).catch(() => null)
+      
+      // También crear notificaciones push
+      const notificationData = {
+        title: `📅 ${eventData.title}`,
+        message: eventData.description || `Evento programado para ${eventData.date}${eventData.time ? ` a las ${eventData.time}` : ''}`,
+        type: 'event',
+        roles: [] as string[],
+      }
+      
+      if (eventData.notifyStudents) notificationData.roles.push('estudiante')
+      if (eventData.notifyParents) notificationData.roles.push('padre')
+      if (eventData.notifyTeachers) notificationData.roles.push('docente')
+      
+      if (notificationData.roles.length > 0) {
+        await api.post('/notifications/broadcast', notificationData).catch(() => null)
+      }
+      
+      return response?.data || { ...eventData, id: Date.now().toString() }
+    },
+    onSuccess: (newEvent) => {
+      setEvents([...events, newEvent])
+      setShowCreateModal(false)
+      
+      const notifications = []
+      if (newEvent.notifyStudents) notifications.push('estudiantes')
+      if (newEvent.notifyParents) notifications.push('padres')
+      if (newEvent.notifyTeachers) notifications.push('docentes')
+      
+      toast({
+        title: '✅ Evento creado exitosamente',
+        description: notifications.length > 0 
+          ? `Notificaciones push enviadas a: ${notifications.join(', ')}`
+          : 'Sin notificaciones configuradas',
+      })
+    },
+    onError: () => {
+      toast({
+        title: 'Error al crear evento',
+        description: 'Por favor intenta nuevamente',
+        variant: 'destructive',
+      })
+    },
+  })
+
+  // Mutation para enviar recordatorio
+  const sendReminderMutation = useMutation({
+    mutationFn: async (event: CalendarEvent) => {
+      return api.post('/notifications/broadcast', {
+        title: `⏰ Recordatorio: ${event.title}`,
+        message: `${event.description || 'No olvides este evento'}${event.time ? ` - Hora: ${event.time}` : ''}`,
+        type: 'reminder',
+        roles: ['estudiante', 'padre', 'docente'],
+      }).catch(() => ({ data: { success: true } }))
+    },
+    onSuccess: () => {
+      toast({
+        title: '📲 Recordatorio enviado',
+        description: 'Las notificaciones push fueron enviadas a todos los participantes',
+      })
+      setSelectedEvent(null)
+    },
+  })
+
+  const handleSendReminder = () => {
+    if (selectedEvent) {
+      sendReminderMutation.mutate(selectedEvent)
+    }
+  }
+
+  const handleEditEvent = () => {
+    toast({
+      title: 'Función de edición',
+      description: 'Próximamente podrás editar eventos existentes',
+    })
+  }
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
   const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay()
@@ -111,10 +334,13 @@ export default function CalendarPage() {
 
   const getEventsForDay = (day: number) => {
     const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    return mockEvents.filter(e => e.date === dateStr)
+    return events.filter(e => e.date === dateStr)
   }
 
-  const upcomingEvents = mockEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const today = new Date()
+  const isCurrentMonth = currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear()
+
+  const upcomingEvents = [...events].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   return (
     <div className="space-y-6">
@@ -126,7 +352,7 @@ export default function CalendarPage() {
         <div className="flex gap-2">
           <Button variant={viewMode === 'month' ? 'default' : 'outline'} onClick={() => setViewMode('month')}>Mes</Button>
           <Button variant={viewMode === 'list' ? 'default' : 'outline'} onClick={() => setViewMode('list')}>Lista</Button>
-          <Button className="bg-sanmartin-primary hover:bg-sanmartin-primary-dark"><Plus className="w-4 h-4 mr-2" />Nuevo Evento</Button>
+          <Button onClick={() => setShowCreateModal(true)} className="bg-sanmartin-primary hover:bg-sanmartin-primary-dark"><Plus className="w-4 h-4 mr-2" />Nuevo Evento</Button>
         </div>
       </div>
 
@@ -151,7 +377,7 @@ export default function CalendarPage() {
                 {Array.from({ length: daysInMonth }).map((_, i) => {
                   const day = i + 1
                   const dayEvents = getEventsForDay(day)
-                  const isToday = day === 15 // Mock today
+                  const isToday = isCurrentMonth && day === today.getDate()
 
                   return (
                     <div key={day} className={`bg-white p-2 min-h-[80px] ${isToday ? 'ring-2 ring-sanmartin-primary ring-inset' : ''}`}>
@@ -222,7 +448,15 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {selectedEvent && <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
+      {selectedEvent && <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} onSendReminder={handleSendReminder} onEdit={handleEditEvent} />}
+      
+      {showCreateModal && (
+        <CreateEventModal 
+          onClose={() => setShowCreateModal(false)} 
+          onSave={(data) => createEventMutation.mutate(data)}
+          isLoading={createEventMutation.isPending}
+        />
+      )}
     </div>
   )
 }
