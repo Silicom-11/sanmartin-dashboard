@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Search, FileText, Clock, CheckCircle, XCircle, Eye, Download, Image, X, AlertCircle } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Search, FileText, Clock, CheckCircle, XCircle, Eye, Download, Image, X, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useToast } from '@/hooks/use-toast'
 import api from '@/services/api'
 
 interface Justification {
@@ -22,16 +23,6 @@ interface Justification {
   reviewedAt?: string
   reviewNote?: string
 }
-
-const mockJustifications: Justification[] = [
-  { _id: '1', student: { firstName: 'María', lastName: 'García', enrollmentNumber: '2024-001', gradeLevel: '3° Primaria A' }, parent: { firstName: 'Roberto', lastName: 'García', phone: '+51 999 111 222' }, date: '2024-01-15', reason: 'Cita médica', description: 'Mi hija tenía cita con el pediatra para control de rutina.', attachmentUrl: '/uploads/justifications/cita-medica.jpg', attachmentType: 'image', status: 'pending' },
-  { _id: '2', student: { firstName: 'Carlos', lastName: 'López', enrollmentNumber: '2024-002', gradeLevel: '1° Secundaria B' }, parent: { firstName: 'Ana', lastName: 'López', phone: '+51 999 333 444' }, date: '2024-01-14', reason: 'Enfermedad', description: 'El niño presentó fiebre alta desde la noche anterior. Adjunto certificado médico.', attachmentUrl: '/uploads/justifications/certificado.pdf', attachmentType: 'pdf', status: 'approved', reviewedBy: 'Admin', reviewedAt: '2024-01-14', reviewNote: 'Certificado válido' },
-  { _id: '3', student: { firstName: 'Pedro', lastName: 'Martínez', enrollmentNumber: '2024-003', gradeLevel: '4° Primaria A' }, parent: { firstName: 'Carmen', lastName: 'Martínez', phone: '+51 999 555 666' }, date: '2024-01-13', reason: 'Viaje familiar', description: 'Viaje de emergencia por fallecimiento de familiar.', status: 'approved', reviewedBy: 'Director', reviewedAt: '2024-01-13' },
-  { _id: '4', student: { firstName: 'Laura', lastName: 'Sánchez', enrollmentNumber: '2024-004', gradeLevel: '2° Secundaria A' }, parent: { firstName: 'José', lastName: 'Sánchez', phone: '+51 999 777 888' }, date: '2024-01-12', reason: 'Otro', description: 'Problemas de transporte, no había manera de llegar al colegio.', status: 'rejected', reviewedBy: 'Admin', reviewedAt: '2024-01-12', reviewNote: 'Motivo no justificable según reglamento' },
-  { _id: '5', student: { firstName: 'Diego', lastName: 'Torres', enrollmentNumber: '2024-005', gradeLevel: '5° Primaria B' }, parent: { firstName: 'María', lastName: 'Torres', phone: '+51 999 999 000' }, date: '2024-01-15', reason: 'Cita médica', description: 'Tratamiento de ortodoncia programado.', attachmentUrl: '/uploads/justifications/ortodoncia.jpg', attachmentType: 'image', status: 'pending' },
-]
-
-const mockStats = { total: 156, pending: 12, approved: 132, rejected: 12 }
 
 const statusConfig = {
   pending: { label: 'Pendiente', bg: 'bg-yellow-100', text: 'text-yellow-700', icon: Clock },
@@ -55,7 +46,7 @@ function StatCard({ title, value, icon: Icon, color }: { title: string; value: n
   )
 }
 
-function JustificationDetailModal({ justification, onClose, onApprove, onReject }: { justification: Justification; onClose: () => void; onApprove: () => void; onReject: () => void }) {
+function JustificationDetailModal({ justification, onClose, onApprove, onReject, isLoading }: { justification: Justification; onClose: () => void; onApprove: (note: string) => void; onReject: (note: string) => void; isLoading?: boolean }) {
   const [reviewNote, setReviewNote] = useState('')
   const config = statusConfig[justification.status]
   const StatusIcon = config.icon
@@ -73,7 +64,7 @@ function JustificationDetailModal({ justification, onClose, onApprove, onReject 
               <Badge className={`${config.bg} ${config.text}`}>{config.label}</Badge>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" disabled={isLoading}><X className="w-5 h-5" /></button>
         </div>
 
         <div className="p-6 space-y-6">
@@ -136,14 +127,14 @@ function JustificationDetailModal({ justification, onClose, onApprove, onReject 
             <div className="space-y-4 pt-4 border-t">
               <div>
                 <label className="text-sm font-medium text-gray-700">Nota de Revisión (opcional)</label>
-                <Input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} placeholder="Añade una nota..." className="mt-1" />
+                <Input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} placeholder="Añade una nota..." className="mt-1" disabled={isLoading} />
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 border-red-500 text-red-600 hover:bg-red-50" onClick={onReject}>
-                  <XCircle className="w-4 h-4 mr-2" />Rechazar
+                <Button variant="outline" className="flex-1 border-red-500 text-red-600 hover:bg-red-50" onClick={() => onReject(reviewNote)} disabled={isLoading}>
+                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XCircle className="w-4 h-4 mr-2" />}Rechazar
                 </Button>
-                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={onApprove}>
-                  <CheckCircle className="w-4 h-4 mr-2" />Aprobar
+                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => onApprove(reviewNote)} disabled={isLoading}>
+                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}Aprobar
                 </Button>
               </div>
             </div>
@@ -158,31 +149,80 @@ export default function JustificationsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [selectedJustification, setSelectedJustification] = useState<Justification | null>(null)
+  
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
 
+  // Query para obtener justificaciones
   const { data, isLoading } = useQuery({
     queryKey: ['justifications', searchTerm, statusFilter],
     queryFn: async () => {
-      try {
-        const response = await api.get('/api/justifications')
-        return response.data
-      } catch {
-        return { data: mockJustifications }
-      }
+      const response = await api.get('/justifications', { params: statusFilter !== 'all' ? { status: statusFilter } : {} })
+      return response.data
     },
   })
 
-  const justifications = (data?.data || mockJustifications).filter((j: Justification) => {
+  // Query para estadísticas
+  const { data: statsData } = useQuery({
+    queryKey: ['justifications-stats'],
+    queryFn: async () => {
+      const response = await api.get('/justifications/stats')
+      return response.data
+    },
+  })
+
+  const stats = statsData?.data || { total: 0, pending: 0, approved: 0, rejected: 0 }
+
+  // Mutation para aprobar
+  const approveMutation = useMutation({
+    mutationFn: async ({ id, reviewNote }: { id: string; reviewNote: string }) => {
+      const response = await api.put(`/justifications/${id}/review`, { status: 'approved', reviewNote })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['justifications'] })
+      queryClient.invalidateQueries({ queryKey: ['justifications-stats'] })
+      toast({ title: 'Justificación aprobada', description: 'La solicitud fue aprobada exitosamente' })
+      setSelectedJustification(null)
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' })
+    },
+  })
+
+  // Mutation para rechazar
+  const rejectMutation = useMutation({
+    mutationFn: async ({ id, reviewNote }: { id: string; reviewNote: string }) => {
+      const response = await api.put(`/justifications/${id}/review`, { status: 'rejected', reviewNote })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['justifications'] })
+      queryClient.invalidateQueries({ queryKey: ['justifications-stats'] })
+      toast({ title: 'Justificación rechazada', description: 'La solicitud fue rechazada' })
+      setSelectedJustification(null)
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' })
+    },
+  })
+
+  const justifications = (data?.data || []).filter((j: Justification) => {
     const matchesSearch = `${j.student.firstName} ${j.student.lastName} ${j.reason}`.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === 'all' || j.status === statusFilter
     return matchesSearch && matchesStatus
   })
 
-  const handleApprove = () => {
-    setSelectedJustification(null)
+  const handleApprove = (reviewNote: string) => {
+    if (selectedJustification) {
+      approveMutation.mutate({ id: selectedJustification._id, reviewNote })
+    }
   }
 
-  const handleReject = () => {
-    setSelectedJustification(null)
+  const handleReject = (reviewNote: string) => {
+    if (selectedJustification) {
+      rejectMutation.mutate({ id: selectedJustification._id, reviewNote })
+    }
   }
 
   return (
@@ -196,17 +236,17 @@ export default function JustificationsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard title="Total Solicitudes" value={mockStats.total} icon={FileText} color="bg-blue-500" />
-        <StatCard title="Pendientes" value={mockStats.pending} icon={Clock} color="bg-yellow-500" />
-        <StatCard title="Aprobadas" value={mockStats.approved} icon={CheckCircle} color="bg-green-500" />
-        <StatCard title="Rechazadas" value={mockStats.rejected} icon={XCircle} color="bg-red-500" />
+        <StatCard title="Total Solicitudes" value={stats.total} icon={FileText} color="bg-blue-500" />
+        <StatCard title="Pendientes" value={stats.pending} icon={Clock} color="bg-yellow-500" />
+        <StatCard title="Aprobadas" value={stats.approved} icon={CheckCircle} color="bg-green-500" />
+        <StatCard title="Rechazadas" value={stats.rejected} icon={XCircle} color="bg-red-500" />
       </div>
 
-      {mockStats.pending > 0 && (
+      {stats.pending > 0 && (
         <Card className="border-yellow-200 bg-yellow-50">
           <CardContent className="p-4 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600" />
-            <span className="text-yellow-800">Tienes <strong>{mockStats.pending}</strong> justificaciones pendientes de revisión</span>
+            <span className="text-yellow-800">Tienes <strong>{stats.pending}</strong> justificaciones pendientes de revisión</span>
           </CardContent>
         </Card>
       )}
@@ -281,7 +321,13 @@ export default function JustificationsPage() {
       )}
 
       {selectedJustification && (
-        <JustificationDetailModal justification={selectedJustification} onClose={() => setSelectedJustification(null)} onApprove={handleApprove} onReject={handleReject} />
+        <JustificationDetailModal 
+          justification={selectedJustification} 
+          onClose={() => setSelectedJustification(null)} 
+          onApprove={handleApprove} 
+          onReject={handleReject}
+          isLoading={approveMutation.isPending || rejectMutation.isPending}
+        />
       )}
     </div>
   )

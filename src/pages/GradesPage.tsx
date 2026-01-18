@@ -175,7 +175,7 @@ export default function GradesPage() {
     queryKey: ['grades', searchTerm, selectedPeriod],
     queryFn: async () => {
       try {
-        const response = await api.get('/api/grades/summary')
+        const response = await api.get('/grades')
         return response.data
       } catch {
         return { data: mockCourseGrades }

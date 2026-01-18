@@ -191,7 +191,7 @@ export default function AttendancePage() {
     queryKey: ['attendance', searchTerm, selectedDate],
     queryFn: async () => {
       try {
-        const response = await api.get('/api/attendance/daily')
+        const response = await api.get('/attendance', { params: { date: selectedDate } })
         return response.data
       } catch {
         return { data: mockCourseAttendance }

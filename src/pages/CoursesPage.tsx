@@ -137,7 +137,7 @@ export default function CoursesPage() {
     queryKey: ['courses', searchTerm, selectedArea],
     queryFn: async () => {
       try {
-        const response = await api.get('/api/course-sections')
+        const response = await api.get('/course-sections')
         return response.data
       } catch {
         return { data: mockCourses }

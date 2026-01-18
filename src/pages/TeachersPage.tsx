@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
   Plus, Search, Eye, Edit, Mail, Phone, BookOpen, 
-  Users, Check, Clock, X, Award
+  Users, Check, Clock, X, Award, Loader2, Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useToast } from '@/hooks/use-toast'
 import api from '@/services/api'
 
 interface Teacher {
@@ -24,14 +25,15 @@ interface Teacher {
   createdAt: string
 }
 
-const mockTeachers: Teacher[] = [
-  { _id: '1', firstName: 'María', lastName: 'González', email: 'maria.gonzalez@sanmartin.edu.pe', phone: '987654321', dni: '12345678', specialty: 'Matemáticas', assignedCourses: 4, isActive: true, createdAt: '2024-01-15' },
-  { _id: '2', firstName: 'Carlos', lastName: 'Rodríguez', email: 'carlos.rodriguez@sanmartin.edu.pe', phone: '987654322', dni: '23456789', specialty: 'Comunicación', assignedCourses: 3, isActive: true, createdAt: '2024-02-20' },
-  { _id: '3', firstName: 'Ana', lastName: 'Martínez', email: 'ana.martinez@sanmartin.edu.pe', phone: '987654323', dni: '34567890', specialty: 'Ciencias', assignedCourses: 5, isActive: true, createdAt: '2024-01-10' },
-  { _id: '4', firstName: 'Luis', lastName: 'Pérez', email: 'luis.perez@sanmartin.edu.pe', phone: '987654324', dni: '45678901', specialty: 'Historia', assignedCourses: 2, isActive: false, createdAt: '2023-08-01' },
-]
-
-const mockStats = { totalTeachers: 45, activeTeachers: 42, withCourses: 38, avgCourses: 3.5 }
+interface TeacherFormData {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  dni: string
+  specialty: string
+  password?: string
+}
 
 function StatCard({ title, value, icon: Icon, color }: { title: string; value: string | number; icon: React.ElementType; color: string }) {
   return (
@@ -51,14 +53,15 @@ function StatCard({ title, value, icon: Icon, color }: { title: string; value: s
   )
 }
 
-function TeacherModal({ teacher, onClose, onSave }: { teacher?: Teacher | null; onClose: () => void; onSave: (data: unknown) => void }) {
-  const [formData, setFormData] = useState({
+function TeacherModal({ teacher, onClose, onSave, isLoading }: { teacher?: Teacher | null; onClose: () => void; onSave: (data: TeacherFormData) => void; isLoading?: boolean }) {
+  const [formData, setFormData] = useState<TeacherFormData>({
     firstName: teacher?.firstName || '',
     lastName: teacher?.lastName || '',
     email: teacher?.email || '',
     phone: teacher?.phone || '',
     dni: teacher?.dni || '',
     specialty: teacher?.specialty || '',
+    password: '',
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -71,34 +74,40 @@ function TeacherModal({ teacher, onClose, onSave }: { teacher?: Teacher | null; 
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl">
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold">{teacher ? 'Editar Docente' : 'Nuevo Docente'}</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" disabled={isLoading}><X className="w-5 h-5" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nombres</label>
-              <Input value={formData.firstName} onChange={(e) => setFormData({...formData, firstName: e.target.value})} required />
+              <Input value={formData.firstName} onChange={(e) => setFormData({...formData, firstName: e.target.value})} required disabled={isLoading} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Apellidos</label>
-              <Input value={formData.lastName} onChange={(e) => setFormData({...formData, lastName: e.target.value})} required />
+              <Input value={formData.lastName} onChange={(e) => setFormData({...formData, lastName: e.target.value})} required disabled={isLoading} />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">DNI</label>
-            <Input value={formData.dni} onChange={(e) => setFormData({...formData, dni: e.target.value})} maxLength={8} required />
+            <Input value={formData.dni} onChange={(e) => setFormData({...formData, dni: e.target.value})} maxLength={8} required disabled={isLoading} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico</label>
-            <Input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required />
+            <Input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required disabled={isLoading} />
           </div>
+          {!teacher && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+              <Input type="password" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} required minLength={6} disabled={isLoading} placeholder="Mínimo 6 caracteres" />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-            <Input value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+            <Input value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} disabled={isLoading} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Especialidad</label>
-            <select value={formData.specialty} onChange={(e) => setFormData({...formData, specialty: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sanmartin-primary">
+            <select value={formData.specialty} onChange={(e) => setFormData({...formData, specialty: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sanmartin-primary" disabled={isLoading}>
               <option value="">Seleccionar</option>
               <option value="Matemáticas">Matemáticas</option>
               <option value="Comunicación">Comunicación</option>
@@ -111,8 +120,10 @@ function TeacherModal({ teacher, onClose, onSave }: { teacher?: Teacher | null; 
             </select>
           </div>
           <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancelar</Button>
-            <Button type="submit" className="flex-1 bg-sanmartin-primary hover:bg-sanmartin-primary-dark">{teacher ? 'Guardar' : 'Registrar'}</Button>
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1" disabled={isLoading}>Cancelar</Button>
+            <Button type="submit" className="flex-1 bg-sanmartin-primary hover:bg-sanmartin-primary-dark" disabled={isLoading}>
+              {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Guardando...</> : teacher ? 'Guardar' : 'Registrar'}
+            </Button>
           </div>
         </form>
       </div>
@@ -189,20 +200,96 @@ export default function TeachersPage() {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null)
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all')
+  
+  const queryClient = useQueryClient()
+  const { toast } = useToast()
 
+  // Query para obtener docentes
   const { data, isLoading } = useQuery({
     queryKey: ['teachers', searchTerm],
     queryFn: async () => {
-      try {
-        const response = await api.get('/api/users?role=docente')
-        return response.data
-      } catch {
-        return { data: mockTeachers }
-      }
+      const response = await api.get('/users', { params: { role: 'docente' } })
+      return response.data
     },
   })
 
-  const teachers = (data?.data || mockTeachers).filter((t: Teacher) => {
+  // Query para estadísticas
+  const { data: statsData } = useQuery({
+    queryKey: ['teachers-stats'],
+    queryFn: async () => {
+      const response = await api.get('/users/stats')
+      return response.data
+    },
+  })
+
+  const stats = statsData?.data?.teachers || { total: 0, active: 0, withCourses: 0, avgCourses: 0 }
+
+  // Mutation para crear docente
+  const createMutation = useMutation({
+    mutationFn: async (data: TeacherFormData) => {
+      const response = await api.post('/users', { ...data, role: 'docente' })
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teachers'] })
+      queryClient.invalidateQueries({ queryKey: ['teachers-stats'] })
+      toast({ title: 'Docente registrado', description: 'El docente fue creado exitosamente' })
+      setShowModal(false)
+      setSelectedTeacher(null)
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' })
+    },
+  })
+
+  // Mutation para actualizar docente
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: TeacherFormData }) => {
+      const response = await api.put(`/users/${id}`, data)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teachers'] })
+      toast({ title: 'Docente actualizado', description: 'Los cambios fueron guardados' })
+      setShowModal(false)
+      setSelectedTeacher(null)
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' })
+    },
+  })
+
+  // Mutation para eliminar (desactivar) docente
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.delete(`/users/${id}`)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['teachers'] })
+      queryClient.invalidateQueries({ queryKey: ['teachers-stats'] })
+      toast({ title: 'Docente desactivado', description: 'El docente fue desactivado del sistema' })
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' })
+    },
+  })
+
+  const handleSave = (formData: TeacherFormData) => {
+    if (selectedTeacher) {
+      updateMutation.mutate({ id: selectedTeacher._id, data: formData })
+    } else {
+      createMutation.mutate(formData)
+    }
+  }
+
+  const handleDelete = (teacher: Teacher) => {
+    if (confirm(`¿Estás seguro de desactivar a ${teacher.firstName} ${teacher.lastName}?`)) {
+      deleteMutation.mutate(teacher._id)
+    }
+  }
+
+  const teachers = (data?.data || []).filter((t: Teacher) => {
     const matchesSearch = `${t.firstName} ${t.lastName} ${t.email}`.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = filterStatus === 'all' || (filterStatus === 'active' ? t.isActive : !t.isActive)
     return matchesSearch && matchesStatus
@@ -221,10 +308,10 @@ export default function TeachersPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard title="Total Docentes" value={mockStats.totalTeachers} icon={Users} color="bg-blue-500" />
-        <StatCard title="Docentes Activos" value={mockStats.activeTeachers} icon={Check} color="bg-green-500" />
-        <StatCard title="Con Cursos" value={mockStats.withCourses} icon={BookOpen} color="bg-purple-500" />
-        <StatCard title="Prom. Cursos" value={mockStats.avgCourses} icon={Award} color="bg-orange-500" />
+        <StatCard title="Total Docentes" value={stats.total} icon={Users} color="bg-blue-500" />
+        <StatCard title="Docentes Activos" value={stats.active} icon={Check} color="bg-green-500" />
+        <StatCard title="Con Cursos" value={stats.withCourses} icon={BookOpen} color="bg-purple-500" />
+        <StatCard title="Prom. Cursos" value={stats.avgCourses} icon={Award} color="bg-orange-500" />
       </div>
 
       <Card>
@@ -275,6 +362,11 @@ export default function TeachersPage() {
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => { setSelectedTeacher(teacher); setShowDetailModal(true); }}><Eye className="w-4 h-4 mr-1" />Ver</Button>
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => { setSelectedTeacher(teacher); setShowModal(true); }}><Edit className="w-4 h-4 mr-1" />Editar</Button>
+                  {teacher.isActive && (
+                    <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => handleDelete(teacher)} disabled={deleteMutation.isPending}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -282,7 +374,14 @@ export default function TeachersPage() {
         </div>
       )}
 
-      {showModal && <TeacherModal teacher={selectedTeacher} onClose={() => { setShowModal(false); setSelectedTeacher(null); }} onSave={() => { setShowModal(false); setSelectedTeacher(null); }} />}
+      {showModal && (
+        <TeacherModal 
+          teacher={selectedTeacher} 
+          onClose={() => { setShowModal(false); setSelectedTeacher(null); }} 
+          onSave={handleSave}
+          isLoading={createMutation.isPending || updateMutation.isPending}
+        />
+      )}
       {showDetailModal && selectedTeacher && <TeacherDetailModal teacher={selectedTeacher} onClose={() => { setShowDetailModal(false); setSelectedTeacher(null); }} />}
     </div>
   )
