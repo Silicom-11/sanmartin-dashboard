@@ -212,6 +212,14 @@ export default function GradesPage() {
   const stats = statsData || { totalGrades: 0, avgScore: 0, passingRate: 0, excellentStudents: 0 }
   const allCourses = coursesData || []
 
+  // Convertir stats a números seguros
+  const safeStats = {
+    totalGrades: Number(stats.totalGrades) || 0,
+    avgScore: Number(stats.avgScore) || 0,
+    passingRate: Number(stats.passingRate) || 0,
+    excellentStudents: Number(stats.excellentStudents) || 0
+  }
+
   const courses = allCourses.filter((c: CourseGrades) => 
     `${c.courseName} ${c.gradeLevel} ${c.teacher}`.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -235,10 +243,10 @@ export default function GradesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard title="Total Calificaciones" value={stats.totalGrades} subtitle="Este bimestre" icon={FileSpreadsheet} color="bg-blue-500" loading={statsLoading} />
-        <StatCard title="Promedio General" value={stats.avgScore?.toFixed(1) || '0.0'} icon={BarChart3} color="bg-green-500" trend="up" loading={statsLoading} />
-        <StatCard title="Tasa de Aprobación" value={`${stats.passingRate}%`} icon={Award} color="bg-purple-500" trend="up" loading={statsLoading} />
-        <StatCard title="Estudiantes Destacados" value={stats.excellentStudents} subtitle="Nota ≥ 17" icon={TrendingUp} color="bg-orange-500" loading={statsLoading} />
+        <StatCard title="Total Calificaciones" value={safeStats.totalGrades} subtitle="Este bimestre" icon={FileSpreadsheet} color="bg-blue-500" loading={statsLoading} />
+        <StatCard title="Promedio General" value={safeStats.avgScore.toFixed(1)} icon={BarChart3} color="bg-green-500" trend="up" loading={statsLoading} />
+        <StatCard title="Tasa de Aprobación" value={`${safeStats.passingRate}%`} icon={Award} color="bg-purple-500" trend="up" loading={statsLoading} />
+        <StatCard title="Estudiantes Destacados" value={safeStats.excellentStudents} subtitle="Nota ≥ 17" icon={TrendingUp} color="bg-orange-500" loading={statsLoading} />
       </div>
 
       {error && (

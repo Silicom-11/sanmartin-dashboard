@@ -177,8 +177,16 @@ export default function CoursesPage() {
 
   const stats = statsData || { totalCourses: 0, activeCourses: 0, totalStudents: 0, avgStudentsPerCourse: 0 }
   const allCourses = coursesData || []
-  
-  const courses = allCourses.filter((c: Course) => {
+
+  // Convertir a números seguros
+  const safeStats = {
+    totalCourses: Number(stats.totalCourses) || 0,
+    activeCourses: Number(stats.activeCourses) || 0,
+    totalStudents: Number(stats.totalStudents) || 0,
+    avgStudentsPerCourse: Number(stats.avgStudentsPerCourse) || 0
+  }
+
+  const courses = allCourses.filter((c: Course) =>{
     const matchesSearch = `${c.name} ${c.gradeLevel} ${c.teacher?.firstName || ''} ${c.teacher?.lastName || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesGrade = selectedGradeLevel === 'Todos' || c.gradeLevel === selectedGradeLevel
     return matchesSearch && matchesGrade

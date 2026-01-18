@@ -241,6 +241,16 @@ export default function AttendancePage() {
   const allCourses = coursesData || []
   const alerts = alertsData || []
 
+  // Convertir a números seguros
+  const safeStats = {
+    totalStudents: Number(stats.totalStudents) || 0,
+    present: Number(stats.present) || 0,
+    absent: Number(stats.absent) || 0,
+    late: Number(stats.late) || 0,
+    justified: Number(stats.justified) || 0,
+    attendanceRate: Number(stats.attendanceRate) || 0
+  }
+
   const courses = allCourses.filter((c: CourseAttendance) => 
     `${c.courseName} ${c.gradeLevel} ${c.teacher}`.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -258,11 +268,11 @@ export default function AttendancePage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <StatCard title="Total Estudiantes" value={stats.totalStudents} icon={Users} color="bg-blue-500" loading={statsLoading} />
-        <StatCard title="Presentes" value={stats.present} icon={UserCheck} color="bg-green-500" loading={statsLoading} />
-        <StatCard title="Ausentes" value={stats.absent} icon={UserX} color="bg-red-500" loading={statsLoading} />
-        <StatCard title="Tardanzas" value={stats.late} icon={Clock} color="bg-yellow-500" loading={statsLoading} />
-        <StatCard title="Tasa Asistencia" value={`${stats.attendanceRate?.toFixed(1) || 0}%`} icon={Calendar} color="bg-purple-500" loading={statsLoading} />
+        <StatCard title="Total Estudiantes" value={safeStats.totalStudents} icon={Users} color="bg-blue-500" loading={statsLoading} />
+        <StatCard title="Presentes" value={safeStats.present} icon={UserCheck} color="bg-green-500" loading={statsLoading} />
+        <StatCard title="Ausentes" value={safeStats.absent} icon={UserX} color="bg-red-500" loading={statsLoading} />
+        <StatCard title="Tardanzas" value={safeStats.late} icon={Clock} color="bg-yellow-500" loading={statsLoading} />
+        <StatCard title="Tasa Asistencia" value={`${safeStats.attendanceRate.toFixed(1)}%`} icon={Calendar} color="bg-purple-500" loading={statsLoading} />
       </div>
 
       {error && (

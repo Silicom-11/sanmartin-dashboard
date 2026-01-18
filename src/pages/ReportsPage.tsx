@@ -82,11 +82,21 @@ export default function ReportsPage() {
   const topCourses = coursesData?.top || []
   const lowCourses = coursesData?.low || []
 
+  // Convertir a números seguros
+  const safeMetrics = {
+    avgScore: Number(metrics.avgScore) || 0,
+    attendanceRate: Number(metrics.attendanceRate) || 0,
+    passingRate: Number(metrics.passingRate) || 0,
+    excellentStudents: Number(metrics.excellentStudents) || 0,
+    totalStudents: Number(metrics.totalStudents) || 0,
+    totalCourses: Number(metrics.totalCourses) || 0
+  }
+
   const metricCards = [
-    { label: 'Promedio General', value: metrics.avgScore?.toFixed(1) || '0.0', trend: 'up', change: '+0.0' },
-    { label: 'Tasa de Asistencia', value: `${metrics.attendanceRate?.toFixed(1) || 0}%`, trend: 'up', change: '+0.0%' },
-    { label: 'Tasa de Aprobación', value: `${metrics.passingRate || 0}%`, trend: 'up', change: '+0.0%' },
-    { label: 'Estudiantes Destacados', value: metrics.excellentStudents || 0, trend: 'up', change: '+0' },
+    { label: 'Promedio General', value: safeMetrics.avgScore.toFixed(1), trend: 'up', change: '+0.0' },
+    { label: 'Tasa de Asistencia', value: `${safeMetrics.attendanceRate.toFixed(1)}%`, trend: 'up', change: '+0.0%' },
+    { label: 'Tasa de Aprobación', value: `${safeMetrics.passingRate}%`, trend: 'up', change: '+0.0%' },
+    { label: 'Estudiantes Destacados', value: safeMetrics.excellentStudents, trend: 'up', change: '+0' },
   ]
 
   return (
