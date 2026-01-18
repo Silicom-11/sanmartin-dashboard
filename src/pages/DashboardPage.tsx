@@ -9,6 +9,7 @@ import {
   TrendingDown,
   Clock,
   AlertCircle,
+  Loader2,
 } from 'lucide-react'
 import {
   LineChart,
@@ -23,38 +24,17 @@ import {
 } from 'recharts'
 import { formatDate } from '@/lib/utils'
 
-// Datos de ejemplo mientras se conecta el API
-const mockStats = {
-  totalStudents: 847,
-  activeStudents: 823,
-  totalTeachers: 45,
-  totalParents: 712,
-  totalCourses: 68,
-  pendingJustifications: 12,
-  todayAttendance: 94.5,
-  attendanceTrend: 2.3,
-}
-
-const mockAttendanceWeek = [
-  { day: 'Lun', value: 95 },
-  { day: 'Mar', value: 93 },
-  { day: 'Mié', value: 96 },
-  { day: 'Jue', value: 92 },
-  { day: 'Vie', value: 94 },
+// Datos de fallback para gráficos cuando no hay datos
+const fallbackAttendanceWeek = [
+  { day: 'Lun', value: 0 },
+  { day: 'Mar', value: 0 },
+  { day: 'Mié', value: 0 },
+  { day: 'Jue', value: 0 },
+  { day: 'Vie', value: 0 },
 ]
 
-const mockStudentsByGrade = [
-  { name: '1° Pri', count: 78 },
-  { name: '2° Pri', count: 82 },
-  { name: '3° Pri', count: 75 },
-  { name: '4° Pri', count: 80 },
-  { name: '5° Pri', count: 77 },
-  { name: '6° Pri', count: 74 },
-  { name: '1° Sec', count: 85 },
-  { name: '2° Sec', count: 88 },
-  { name: '3° Sec', count: 72 },
-  { name: '4° Sec', count: 70 },
-  { name: '5° Sec', count: 66 },
+const fallbackStudentsByGrade = [
+  { name: 'Sin datos', count: 0 },
 ]
 
 const mockRecentActivity = [
@@ -101,14 +81,39 @@ function StatCard({ title, value, change, icon: Icon, iconColor, iconBg }: StatC
 }
 
 export default function DashboardPage() {
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: dashboardService.getAdminStats,
     refetchInterval: 30000, // Refrescar cada 30 segundos
   })
 
-  // Usar datos del API o mock
-  const stats = data?.data || mockStats
+  // Extraer stats de la respuesta del API
+  const apiStats = data?.data?.stats || {}
+  const studentsByGrade = data?.data?.studentsByGrade || []
+  const attendanceToday = data?.data?.attendanceToday || {}
+  
+  // Calcular porcentaje de asistencia de hoy
+  const totalAttendance = (attendanceToday.present || 0) + (attendanceToday.absent || 0) + (attendanceToday.late || 0) + (attendanceToday.justified || 0)
+  const attendanceRate = totalAttendance > 0 
+    ? ((attendanceToday.present + attendanceToday.late + attendanceToday.justified) / totalAttendance * 100).toFixed(1)
+    : '0'
+
+  // Formatear estudiantes por grado para el gráfico
+  const formattedStudentsByGrade = studentsByGrade.length > 0 
+    ? studentsByGrade.map((g: { _id: string; count: number }) => ({
+        name: g._id || 'Sin grado',
+        count: g.count
+      }))
+    : fallbackStudentsByGrade
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-sanmartin-primary" />
+        <span className="ml-2 text-gray-600">Cargando datos...</span>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -124,29 +129,29 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Estudiantes"
-          value={stats.totalStudents || mockStats.totalStudents}
-          change={3.2}
+          value={apiStats.totalStudents ?? 0}
+          change={apiStats.totalStudents > 0 ? 3.2 : undefined}
           icon={GraduationCap}
           iconColor="text-blue-600"
           iconBg="bg-blue-100"
         />
         <StatCard
           title="Docentes Activos"
-          value={stats.totalTeachers || mockStats.totalTeachers}
+          value={apiStats.totalTeachers ?? 0}
           icon={Users}
           iconColor="text-green-600"
           iconBg="bg-green-100"
         />
         <StatCard
           title="Cursos Activos"
-          value={stats.totalCourses || mockStats.totalCourses}
+          value={apiStats.totalCourses ?? 0}
           icon={BookOpen}
           iconColor="text-purple-600"
           iconBg="bg-purple-100"
         />
         <StatCard
           title="Justificaciones Pendientes"
-          value={stats.pendingJustifications || mockStats.pendingJustifications}
+          value={apiStats.pendingJustifications ?? 0}
           icon={FileText}
           iconColor="text-orange-600"
           iconBg="bg-orange-100"
@@ -162,12 +167,13 @@ export default function DashboardPage() {
           </div>
           <div className="text-right">
             <p className="text-3xl font-bold text-sanmartin-primary">
-              {mockStats.todayAttendance}%
+              {attendanceRate}%
             </p>
-            <div className="flex items-center gap-1 text-green-600">
-              <TrendingUp className="w-4 h-4" />
-              <span className="text-sm font-medium">+{mockStats.attendanceTrend}%</span>
-            </div>
+            {totalAttendance > 0 && (
+              <p className="text-sm text-gray-500">
+                {attendanceToday.present || 0} presentes de {totalAttendance}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -181,10 +187,10 @@ export default function DashboardPage() {
           </h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mockAttendanceWeek}>
+              <LineChart data={fallbackAttendanceWeek}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="day" stroke="#6b7280" fontSize={12} />
-                <YAxis stroke="#6b7280" fontSize={12} domain={[80, 100]} />
+                <YAxis stroke="#6b7280" fontSize={12} domain={[0, 100]} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: 'white',
@@ -212,7 +218,7 @@ export default function DashboardPage() {
           </h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={mockStudentsByGrade}>
+              <BarChart data={formattedStudentsByGrade}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="name" stroke="#6b7280" fontSize={10} />
                 <YAxis stroke="#6b7280" fontSize={12} />
@@ -266,39 +272,58 @@ export default function DashboardPage() {
             Alertas Pendientes
           </h3>
           <div className="space-y-3">
-            <div className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-red-900">
-                  5 estudiantes con más de 3 faltas
-                </p>
-                <p className="text-xs text-red-700 mt-0.5">
-                  Requieren atención inmediata
-                </p>
+            {(attendanceToday.absent || 0) > 0 && (
+              <div className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-900">
+                    {attendanceToday.absent} estudiantes ausentes hoy
+                  </p>
+                  <p className="text-xs text-red-700 mt-0.5">
+                    Requieren seguimiento
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-orange-900">
-                  12 justificaciones sin revisar
-                </p>
-                <p className="text-xs text-orange-700 mt-0.5">
-                  Pendientes desde hace 3 días
-                </p>
+            )}
+            {(apiStats.pendingJustifications || 0) > 0 && (
+              <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-orange-900">
+                    {apiStats.pendingJustifications} justificaciones sin revisar
+                  </p>
+                  <p className="text-xs text-orange-700 mt-0.5">
+                    Pendientes de revisión
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-blue-900">
-                  Reunión de padres mañana
-                </p>
-                <p className="text-xs text-blue-700 mt-0.5">
-                  14 de Enero - 3:00 PM
-                </p>
+            )}
+            {(apiStats.totalStudents || 0) === 0 && (apiStats.totalTeachers || 0) === 0 && (
+              <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">
+                    Base de datos vacía
+                  </p>
+                  <p className="text-xs text-blue-700 mt-0.5">
+                    Comienza registrando estudiantes y docentes
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
+            {(apiStats.totalStudents || 0) > 0 && (apiStats.pendingJustifications || 0) === 0 && (attendanceToday.absent || 0) === 0 && (
+              <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
+                <TrendingUp className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-green-900">
+                    Todo en orden
+                  </p>
+                  <p className="text-xs text-green-700 mt-0.5">
+                    No hay alertas pendientes
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

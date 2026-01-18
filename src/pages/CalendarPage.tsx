@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, Users, Tag, X, GraduationCap, Flag, PartyPopper, Bell, Send, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,8 @@ import { useToast } from '@/hooks/use-toast'
 import api from '@/services/api'
 
 interface CalendarEvent {
-  id: string
+  _id?: string
+  id?: string
   title: string
   date: string
   time?: string
@@ -240,38 +241,33 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [viewMode, setViewMode] = useState<'month' | 'list'>('month')
-  const [events, setEvents] = useState(mockEvents)
   
   const { toast } = useToast()
+  const queryClient = useQueryClient()
+
+  // Query para obtener eventos de la API
+  const { data: eventsData, isLoading } = useQuery({
+    queryKey: ['events'],
+    queryFn: async () => {
+      const response = await api.get('/events')
+      return response.data
+    },
+  })
+
+  // Usar eventos de la API o array vacío
+  const events: CalendarEvent[] = eventsData?.data || []
 
   // Mutation para crear evento y enviar notificaciones
   const createEventMutation = useMutation({
     mutationFn: async (eventData: Omit<CalendarEvent, 'id'>) => {
-      // Crear evento en backend
-      const response = await api.post('/events', eventData).catch(() => null)
-      
-      // También crear notificaciones push
-      const notificationData = {
-        title: `📅 ${eventData.title}`,
-        message: eventData.description || `Evento programado para ${eventData.date}${eventData.time ? ` a las ${eventData.time}` : ''}`,
-        type: 'event',
-        roles: [] as string[],
-      }
-      
-      if (eventData.notifyStudents) notificationData.roles.push('estudiante')
-      if (eventData.notifyParents) notificationData.roles.push('padre')
-      if (eventData.notifyTeachers) notificationData.roles.push('docente')
-      
-      if (notificationData.roles.length > 0) {
-        await api.post('/notifications/broadcast', notificationData).catch(() => null)
-      }
-      
-      return response?.data || { ...eventData, id: Date.now().toString() }
+      const response = await api.post('/events', eventData)
+      return response.data
     },
-    onSuccess: (newEvent) => {
-      setEvents([...events, newEvent])
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['events'] })
       setShowCreateModal(false)
       
+      const newEvent = response.data || response
       const notifications = []
       if (newEvent.notifyStudents) notifications.push('estudiantes')
       if (newEvent.notifyParents) notifications.push('padres')
@@ -281,7 +277,7 @@ export default function CalendarPage() {
         title: '✅ Evento creado exitosamente',
         description: notifications.length > 0 
           ? `Notificaciones push enviadas a: ${notifications.join(', ')}`
-          : 'Sin notificaciones configuradas',
+          : 'Evento guardado sin notificaciones',
       })
     },
     onError: () => {
@@ -296,12 +292,17 @@ export default function CalendarPage() {
   // Mutation para enviar recordatorio
   const sendReminderMutation = useMutation({
     mutationFn: async (event: CalendarEvent) => {
+      const eventId = event._id || event.id
+      if (eventId) {
+        return api.post(`/events/${eventId}/reminder`)
+      }
+      // Fallback si no hay ID
       return api.post('/notifications/broadcast', {
         title: `⏰ Recordatorio: ${event.title}`,
         message: `${event.description || 'No olvides este evento'}${event.time ? ` - Hora: ${event.time}` : ''}`,
         type: 'reminder',
         roles: ['estudiante', 'padre', 'docente'],
-      }).catch(() => ({ data: { success: true } }))
+      })
     },
     onSuccess: () => {
       toast({
