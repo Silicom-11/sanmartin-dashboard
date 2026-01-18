@@ -20,9 +20,6 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
 } from 'recharts'
 import { formatDate } from '@/lib/utils'
 
@@ -67,8 +64,6 @@ const mockRecentActivity = [
   { id: 4, type: 'student', message: 'Nuevo estudiante registrado - María García', time: '2 horas' },
 ]
 
-const COLORS = ['#0066CC', '#00B894', '#FDCB6E', '#FF6B6B', '#9B59B6']
-
 interface StatCardProps {
   title: string
   value: string | number
@@ -106,7 +101,7 @@ function StatCard({ title, value, change, icon: Icon, iconColor, iconBg }: StatC
 }
 
 export default function DashboardPage() {
-  const { data, isLoading, error } = useQuery({
+  const { data } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: dashboardService.getAdminStats,
     refetchInterval: 30000, // Refrescar cada 30 segundos

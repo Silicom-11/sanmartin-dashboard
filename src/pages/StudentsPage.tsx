@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { studentsService } from '@/services/api'
-import { Plus, Search, Filter, MoreHorizontal, Eye, Edit, Trash2 } from 'lucide-react'
+import { Plus, Search, Eye, Edit, Trash2 } from 'lucide-react'
 import { GRADE_LEVELS, SECTIONS } from '@/lib/utils'
 
 // Mock data para desarrollo
@@ -18,7 +18,7 @@ export default function StudentsPage() {
   const [selectedGrade, setSelectedGrade] = useState('')
   const [selectedSection, setSelectedSection] = useState('')
 
-  const { data, isLoading } = useQuery({
+  const { data } = useQuery({
     queryKey: ['students', searchTerm, selectedGrade, selectedSection],
     queryFn: () => studentsService.getAll({
       search: searchTerm,
