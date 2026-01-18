@@ -145,15 +145,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          <div className="mt-6 text-center">
-            <a
-              href="#"
-              className="text-sm text-sanmartin-primary hover:underline"
-            >
-              ¿Olvidaste tu contraseña?
-            </a>
-          </div>
         </div>
 
         {/* Footer */}
