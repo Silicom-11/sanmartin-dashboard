@@ -205,10 +205,10 @@ export default function CoursesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard title="Total Cursos" value={stats.totalCourses} icon={BookOpen} color="bg-blue-500" loading={statsLoading} />
-        <StatCard title="Cursos Activos" value={stats.activeCourses} icon={Calendar} color="bg-green-500" loading={statsLoading} />
-        <StatCard title="Total Estudiantes" value={stats.totalStudents} icon={Users} color="bg-purple-500" loading={statsLoading} />
-        <StatCard title="Prom. Alumnos/Curso" value={stats.avgStudentsPerCourse} icon={GraduationCap} color="bg-orange-500" loading={statsLoading} />
+        <StatCard title="Total Cursos" value={safeStats.totalCourses} icon={BookOpen} color="bg-blue-500" loading={statsLoading} />
+        <StatCard title="Cursos Activos" value={safeStats.activeCourses} icon={Calendar} color="bg-green-500" loading={statsLoading} />
+        <StatCard title="Total Estudiantes" value={safeStats.totalStudents} icon={Users} color="bg-purple-500" loading={statsLoading} />
+        <StatCard title="Prom. Alumnos/Curso" value={safeStats.avgStudentsPerCourse} icon={GraduationCap} color="bg-orange-500" loading={statsLoading} />
       </div>
 
       <Card>
