@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, Users, Tag, X, GraduationCap, Flag, PartyPopper, Bell, Send, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -23,14 +23,7 @@ interface CalendarEvent {
   notifyTeachers?: boolean
 }
 
-const mockEvents: CalendarEvent[] = [
-  { id: '1', title: 'Examen de Matemáticas - 3° Primaria', date: '2024-01-15', time: '08:00', type: 'exam', description: 'Evaluación Bimestre 1', location: 'Aulas 3A, 3B, 3C' },
-  { id: '2', title: 'Reunión de Padres', date: '2024-01-18', time: '17:00', type: 'meeting', description: 'Entrega de libretas B1', location: 'Auditorio Principal', participants: 'Todos los grados' },
-  { id: '3', title: 'Día del Maestro', date: '2024-01-20', type: 'holiday', description: 'Feriado escolar' },
-  { id: '4', title: 'Olimpiadas Deportivas', date: '2024-01-22', time: '09:00', type: 'activity', description: 'Competencias interaulas', location: 'Campo deportivo' },
-  { id: '5', title: 'Entrega de Notas B1', date: '2024-01-25', type: 'deadline', description: 'Fecha límite docentes' },
-  { id: '6', title: 'Simulacro de Sismo', date: '2024-01-28', time: '10:00', type: 'activity', description: 'Evacuación general', participants: 'Toda la institución' },
-]
+// Eventos se cargan desde la API
 
 const eventColors = {
   exam: { bg: 'bg-red-100', text: 'text-red-700', icon: GraduationCap },
@@ -246,7 +239,7 @@ export default function CalendarPage() {
   const queryClient = useQueryClient()
 
   // Query para obtener eventos de la API
-  const { data: eventsData, isLoading } = useQuery({
+  const { data: eventsData } = useQuery({
     queryKey: ['events'],
     queryFn: async () => {
       const response = await api.get('/events')
