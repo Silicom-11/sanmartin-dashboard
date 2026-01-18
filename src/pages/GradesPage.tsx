@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, FileSpreadsheet, TrendingUp, TrendingDown, Award, Users, BookOpen, Download, Eye, BarChart3, X } from 'lucide-react'
+import { Search, FileSpreadsheet, TrendingUp, TrendingDown, Award, Users, BookOpen, Download, Eye, BarChart3, X, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +19,7 @@ interface StudentGrade {
 interface CourseGrades {
   _id: string
   courseName: string
+  courseCode: string
   gradeLevel: string
   section: string
   teacher: string
@@ -27,27 +28,16 @@ interface CourseGrades {
   passingRate: number
 }
 
-const mockCourseGrades: CourseGrades[] = [
-  { _id: '1', courseName: 'Matemáticas', gradeLevel: '3° Primaria', section: 'A', teacher: 'María González', studentsCount: 32, averageScore: 14.8, passingRate: 91 },
-  { _id: '2', courseName: 'Comunicación', gradeLevel: '3° Primaria', section: 'A', teacher: 'Carlos Rodríguez', studentsCount: 32, averageScore: 15.2, passingRate: 94 },
-  { _id: '3', courseName: 'Ciencias Naturales', gradeLevel: '4° Primaria', section: 'B', teacher: 'Ana Martínez', studentsCount: 30, averageScore: 13.5, passingRate: 85 },
-  { _id: '4', courseName: 'Historia', gradeLevel: '1° Secundaria', section: 'A', teacher: 'Luis Pérez', studentsCount: 35, averageScore: 14.1, passingRate: 88 },
-  { _id: '5', courseName: 'Inglés', gradeLevel: '2° Secundaria', section: 'B', teacher: 'María González', studentsCount: 28, averageScore: 15.6, passingRate: 96 },
-]
-
-const mockStudentGrades: StudentGrade[] = [
-  { _id: '1', student: { firstName: 'Juan', lastName: 'Pérez', enrollmentNumber: '2024-001' }, grades: [{ period: 1, score: 16, status: 'A' }, { period: 2, score: 17, status: 'A' }], average: 16.5, status: 'aprobado' },
-  { _id: '2', student: { firstName: 'María', lastName: 'López', enrollmentNumber: '2024-002' }, grades: [{ period: 1, score: 18, status: 'AD' }, { period: 2, score: 19, status: 'AD' }], average: 18.5, status: 'aprobado' },
-  { _id: '3', student: { firstName: 'Carlos', lastName: 'García', enrollmentNumber: '2024-003' }, grades: [{ period: 1, score: 12, status: 'B' }, { period: 2, score: 13, status: 'B' }], average: 12.5, status: 'aprobado' },
-  { _id: '4', student: { firstName: 'Ana', lastName: 'Martínez', enrollmentNumber: '2024-004' }, grades: [{ period: 1, score: 9, status: 'C' }, { period: 2, score: 10, status: 'C' }], average: 9.5, status: 'desaprobado' },
-  { _id: '5', student: { firstName: 'Pedro', lastName: 'Sánchez', enrollmentNumber: '2024-005' }, grades: [{ period: 1, score: 15, status: 'A' }, { period: 2, score: 14, status: 'A' }], average: 14.5, status: 'aprobado' },
-]
-
-const mockStats = { totalGrades: 2456, avgScore: 14.7, passingRate: 89, excellentStudents: 124 }
+interface GradeStats {
+  totalGrades: number
+  avgScore: number
+  passingRate: number
+  excellentStudents: number
+}
 
 const periods = ['Bimestre 1', 'Bimestre 2', 'Bimestre 3', 'Bimestre 4']
 
-function StatCard({ title, value, subtitle, icon: Icon, color, trend }: { title: string; value: string | number; subtitle?: string; icon: React.ElementType; color: string; trend?: 'up' | 'down' }) {
+function StatCard({ title, value, subtitle, icon: Icon, color, trend, loading }: { title: string; value: string | number; subtitle?: string; icon: React.ElementType; color: string; trend?: 'up' | 'down'; loading?: boolean }) {
   return (
     <Card>
       <CardContent className="p-6">
@@ -55,8 +45,14 @@ function StatCard({ title, value, subtitle, icon: Icon, color, trend }: { title:
           <div>
             <p className="text-sm font-medium text-gray-500">{title}</p>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-2xl font-bold text-gray-900">{value}</p>
-              {trend && (trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />)}
+              {loading ? (
+                <Skeleton className="h-8 w-20" />
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-gray-900">{value}</p>
+                  {trend && (trend === 'up' ? <TrendingUp className="w-4 h-4 text-green-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />)}
+                </>
+              )}
             </div>
             {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
           </div>
@@ -74,6 +70,17 @@ function GradeDetailModal({ course, onClose }: { course: CourseGrades; onClose: 
     if (score >= 11) return 'text-yellow-600 bg-yellow-50'
     return 'text-red-600 bg-red-50'
   }
+
+  // Cargar notas detalladas de estudiantes para este curso
+  const { data: studentGradesData, isLoading: loadingStudents } = useQuery({
+    queryKey: ['course-student-grades', course._id],
+    queryFn: async () => {
+      const response = await api.get(`/grades/course/${course._id}`)
+      return response.data.data as StudentGrade[]
+    },
+  })
+
+  const studentGrades = studentGradesData || []
 
   const getStatusBadge = (status: string) => {
     const styles = { aprobado: 'bg-green-100 text-green-700', desaprobado: 'bg-red-100 text-red-700', proceso: 'bg-yellow-100 text-yellow-700' }
@@ -97,68 +104,81 @@ function GradeDetailModal({ course, onClose }: { course: CourseGrades; onClose: 
         <div className="p-6">
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="p-4 bg-blue-50 rounded-xl text-center">
-              <p className="text-3xl font-bold text-blue-600">{course.averageScore}</p>
+              <p className="text-3xl font-bold text-blue-600">{course.averageScore?.toFixed(1) || '0.0'}</p>
               <p className="text-sm text-gray-500">Promedio General</p>
             </div>
             <div className="p-4 bg-green-50 rounded-xl text-center">
-              <p className="text-3xl font-bold text-green-600">{course.passingRate}%</p>
+              <p className="text-3xl font-bold text-green-600">{course.passingRate || 0}%</p>
               <p className="text-sm text-gray-500">Tasa de Aprobación</p>
             </div>
             <div className="p-4 bg-purple-50 rounded-xl text-center">
-              <p className="text-3xl font-bold text-purple-600">{course.studentsCount}</p>
+              <p className="text-3xl font-bold text-purple-600">{course.studentsCount || 0}</p>
               <p className="text-sm text-gray-500">Estudiantes</p>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="text-left p-3 font-medium text-gray-700">Estudiante</th>
-                  <th className="text-center p-3 font-medium text-gray-700">B1</th>
-                  <th className="text-center p-3 font-medium text-gray-700">B2</th>
-                  <th className="text-center p-3 font-medium text-gray-700">B3</th>
-                  <th className="text-center p-3 font-medium text-gray-700">B4</th>
-                  <th className="text-center p-3 font-medium text-gray-700">Prom.</th>
-                  <th className="text-center p-3 font-medium text-gray-700">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockStudentGrades.map((sg) => (
-                  <tr key={sg._id} className="border-b hover:bg-gray-50">
-                    <td className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-sanmartin-primary rounded-full flex items-center justify-center text-white text-sm font-bold">
-                          {sg.student.firstName[0]}{sg.student.lastName[0]}
+          {loadingStudents ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : studentGrades.length === 0 ? (
+            <div className="text-center py-12">
+              <FileSpreadsheet className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No hay notas registradas para este curso.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="text-left p-3 font-medium text-gray-700">Estudiante</th>
+                    <th className="text-center p-3 font-medium text-gray-700">B1</th>
+                    <th className="text-center p-3 font-medium text-gray-700">B2</th>
+                    <th className="text-center p-3 font-medium text-gray-700">B3</th>
+                    <th className="text-center p-3 font-medium text-gray-700">B4</th>
+                    <th className="text-center p-3 font-medium text-gray-700">Prom.</th>
+                    <th className="text-center p-3 font-medium text-gray-700">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {studentGrades.map((sg) => (
+                    <tr key={sg._id} className="border-b hover:bg-gray-50">
+                      <td className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-sanmartin-primary rounded-full flex items-center justify-center text-white text-sm font-bold">
+                            {sg.student.firstName?.[0]}{sg.student.lastName?.[0]}
+                          </div>
+                          <div>
+                            <p className="font-medium">{sg.student.firstName} {sg.student.lastName}</p>
+                            <p className="text-xs text-gray-400">{sg.student.enrollmentNumber}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{sg.student.firstName} {sg.student.lastName}</p>
-                          <p className="text-xs text-gray-400">{sg.student.enrollmentNumber}</p>
-                        </div>
-                      </div>
-                    </td>
-                    {[0, 1, 2, 3].map((i) => (
-                      <td key={i} className="p-3 text-center">
-                        <span className={`px-2 py-1 rounded-lg font-medium ${getScoreColor(sg.grades[i]?.score || 0)}`}>
-                          {sg.grades[i]?.score || '-'}
+                      </td>
+                      {[0, 1, 2, 3].map((i) => (
+                        <td key={i} className="p-3 text-center">
+                          <span className={`px-2 py-1 rounded-lg font-medium ${getScoreColor(sg.grades?.[i]?.score || 0)}`}>
+                            {sg.grades?.[i]?.score || '-'}
+                          </span>
+                        </td>
+                      ))}
+                      <td className="p-3 text-center">
+                        <span className={`px-3 py-1 rounded-lg font-bold ${getScoreColor(sg.average || 0)}`}>
+                          {(sg.average || 0).toFixed(1)}
                         </span>
                       </td>
-                    ))}
-                    <td className="p-3 text-center">
-                      <span className={`px-3 py-1 rounded-lg font-bold ${getScoreColor(sg.average)}`}>
-                        {sg.average.toFixed(1)}
-                      </span>
-                    </td>
-                    <td className="p-3 text-center">
-                      <Badge className={getStatusBadge(sg.status)}>
-                        {sg.status === 'aprobado' ? 'Aprobado' : sg.status === 'desaprobado' ? 'Desaprobado' : 'En Proceso'}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <td className="p-3 text-center">
+                        <Badge className={getStatusBadge(sg.status)}>
+                          {sg.status === 'aprobado' ? 'Aprobado' : sg.status === 'desaprobado' ? 'Desaprobado' : 'En Proceso'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -171,23 +191,28 @@ export default function GradesPage() {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedCourse, setSelectedCourse] = useState<CourseGrades | null>(null)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['grades', searchTerm, selectedPeriod],
+  // Cargar estadísticas reales
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['grades-stats'],
     queryFn: async () => {
-      try {
-        const response = await api.get('/grades')
-        return response.data
-      } catch {
-        return null
-      }
+      const response = await api.get('/grades/stats')
+      return response.data.data as GradeStats
     },
   })
 
-  // Asegurar que siempre sea un array
-  const rawData = data?.data?.grades || data?.data || data?.grades || []
-  const courseData = Array.isArray(rawData) ? rawData : mockCourseGrades
-  
-  const courses = courseData.filter((c: CourseGrades) => 
+  // Cargar cursos con calificaciones
+  const { data: coursesData, isLoading: coursesLoading, error } = useQuery({
+    queryKey: ['grades-by-course', selectedPeriod],
+    queryFn: async () => {
+      const response = await api.get('/grades/by-course')
+      return response.data.data as CourseGrades[]
+    },
+  })
+
+  const stats = statsData || { totalGrades: 0, avgScore: 0, passingRate: 0, excellentStudents: 0 }
+  const allCourses = coursesData || []
+
+  const courses = allCourses.filter((c: CourseGrades) => 
     `${c.courseName} ${c.gradeLevel} ${c.teacher}`.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -210,11 +235,20 @@ export default function GradesPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard title="Total Calificaciones" value={mockStats.totalGrades} subtitle="Este bimestre" icon={FileSpreadsheet} color="bg-blue-500" />
-        <StatCard title="Promedio General" value={mockStats.avgScore} icon={BarChart3} color="bg-green-500" trend="up" />
-        <StatCard title="Tasa de Aprobación" value={`${mockStats.passingRate}%`} icon={Award} color="bg-purple-500" trend="up" />
-        <StatCard title="Estudiantes Destacados" value={mockStats.excellentStudents} subtitle="Nota ≥ 17" icon={TrendingUp} color="bg-orange-500" />
+        <StatCard title="Total Calificaciones" value={stats.totalGrades} subtitle="Este bimestre" icon={FileSpreadsheet} color="bg-blue-500" loading={statsLoading} />
+        <StatCard title="Promedio General" value={stats.avgScore?.toFixed(1) || '0.0'} icon={BarChart3} color="bg-green-500" trend="up" loading={statsLoading} />
+        <StatCard title="Tasa de Aprobación" value={`${stats.passingRate}%`} icon={Award} color="bg-purple-500" trend="up" loading={statsLoading} />
+        <StatCard title="Estudiantes Destacados" value={stats.excellentStudents} subtitle="Nota ≥ 17" icon={TrendingUp} color="bg-orange-500" loading={statsLoading} />
       </div>
+
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4 flex items-center gap-2 text-red-600">
+            <AlertCircle className="w-5 h-5" />
+            <span>Error al cargar las calificaciones. Por favor, intenta de nuevo.</span>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-4">
@@ -234,12 +268,22 @@ export default function GradesPage() {
         </CardContent>
       </Card>
 
-      {isLoading ? (
+      {coursesLoading ? (
         <div className="space-y-4">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i}><CardContent className="p-6"><Skeleton className="h-20 w-full" /></CardContent></Card>
           ))}
         </div>
+      ) : courses.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <FileSpreadsheet className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay calificaciones</h3>
+            <p className="text-gray-500 mb-4">
+              {searchTerm ? 'No se encontraron cursos con los filtros seleccionados.' : 'Aún no hay calificaciones registradas en el sistema.'}
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-4">
           {courses.map((course: CourseGrades) => (
@@ -262,20 +306,20 @@ export default function GradesPage() {
                       <p className="text-sm text-gray-500">Estudiantes</p>
                       <div className="flex items-center gap-1">
                         <Users className="w-4 h-4 text-gray-400" />
-                        <span className="font-bold text-lg">{course.studentsCount}</span>
+                        <span className="font-bold text-lg">{course.studentsCount || 0}</span>
                       </div>
                     </div>
                     <div className="text-center">
                       <p className="text-sm text-gray-500">Promedio</p>
-                      <p className={`font-bold text-2xl ${getScoreColor(course.averageScore)}`}>{course.averageScore}</p>
+                      <p className={`font-bold text-2xl ${getScoreColor(course.averageScore || 0)}`}>{(course.averageScore || 0).toFixed(1)}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-sm text-gray-500">Aprobación</p>
                       <div className="flex items-center gap-1">
                         <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-green-500 rounded-full" style={{ width: `${course.passingRate}%` }} />
+                          <div className="h-full bg-green-500 rounded-full" style={{ width: `${course.passingRate || 0}%` }} />
                         </div>
-                        <span className="font-bold text-sm text-green-600">{course.passingRate}%</span>
+                        <span className="font-bold text-sm text-green-600">{course.passingRate || 0}%</span>
                       </div>
                     </div>
                     <Button variant="outline" onClick={() => { setSelectedCourse(course); setShowDetailModal(true); }}>

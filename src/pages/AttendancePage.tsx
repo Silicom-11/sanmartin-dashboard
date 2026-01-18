@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Calendar, Check, X, Clock, AlertTriangle, Users, FileText, Download, Eye, UserCheck, UserX } from 'lucide-react'
+import { Search, Calendar, Check, X, Clock, AlertTriangle, Users, FileText, Download, Eye, UserCheck, UserX, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -30,34 +30,33 @@ interface CourseAttendance {
   total: number
 }
 
-const mockCourseAttendance: CourseAttendance[] = [
-  { _id: '1', courseName: 'Matemáticas', gradeLevel: '3° Primaria', section: 'A', teacher: 'María González', date: '2024-01-15', present: 28, absent: 2, late: 1, justified: 1, total: 32 },
-  { _id: '2', courseName: 'Comunicación', gradeLevel: '3° Primaria', section: 'A', teacher: 'Carlos Rodríguez', date: '2024-01-15', present: 30, absent: 1, late: 0, justified: 1, total: 32 },
-  { _id: '3', courseName: 'Ciencias Naturales', gradeLevel: '4° Primaria', section: 'B', teacher: 'Ana Martínez', date: '2024-01-15', present: 27, absent: 2, late: 1, justified: 0, total: 30 },
-  { _id: '4', courseName: 'Historia', gradeLevel: '1° Secundaria', section: 'A', teacher: 'Luis Pérez', date: '2024-01-15', present: 32, absent: 1, late: 2, justified: 0, total: 35 },
-  { _id: '5', courseName: 'Inglés', gradeLevel: '2° Secundaria', section: 'B', teacher: 'María González', date: '2024-01-15', present: 25, absent: 2, late: 1, justified: 0, total: 28 },
-]
+interface AttendanceStats {
+  totalStudents: number
+  present: number
+  absent: number
+  late: number
+  justified: number
+  attendanceRate: number
+}
 
-const mockAttendanceRecords: AttendanceRecord[] = [
-  { _id: '1', student: { firstName: 'Juan', lastName: 'Pérez', enrollmentNumber: '2024-001' }, status: 'present', time: '07:45' },
-  { _id: '2', student: { firstName: 'María', lastName: 'López', enrollmentNumber: '2024-002' }, status: 'present', time: '07:50' },
-  { _id: '3', student: { firstName: 'Carlos', lastName: 'García', enrollmentNumber: '2024-003' }, status: 'late', time: '08:15', note: 'Tráfico' },
-  { _id: '4', student: { firstName: 'Ana', lastName: 'Martínez', enrollmentNumber: '2024-004' }, status: 'absent' },
-  { _id: '5', student: { firstName: 'Pedro', lastName: 'Sánchez', enrollmentNumber: '2024-005' }, status: 'justified', note: 'Cita médica' },
-  { _id: '6', student: { firstName: 'Laura', lastName: 'Díaz', enrollmentNumber: '2024-006' }, status: 'present', time: '07:55' },
-  { _id: '7', student: { firstName: 'Diego', lastName: 'Torres', enrollmentNumber: '2024-007' }, status: 'present', time: '07:48' },
-]
+interface AttendanceAlert {
+  type: 'consecutive_absences' | 'frequent_lates' | 'pending_justifications'
+  count: number
+  message: string
+}
 
-const mockStats = { totalToday: 847, presentToday: 812, absentToday: 24, lateToday: 11, attendanceRate: 95.8 }
-
-function StatCard({ title, value, subtitle, icon: Icon, color }: { title: string; value: string | number; subtitle?: string; icon: React.ElementType; color: string }) {
+function StatCard({ title, value, subtitle, icon: Icon, color, loading }: { title: string; value: string | number; subtitle?: string; icon: React.ElementType; color: string; loading?: boolean }) {
   return (
     <Card>
       <CardContent className="p-6">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-gray-500">{title}</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+            {loading ? (
+              <Skeleton className="h-8 w-20 mt-1" />
+            ) : (
+              <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+            )}
             {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
           </div>
           <div className={`p-3 rounded-xl ${color}`}><Icon className="w-6 h-6 text-white" /></div>
@@ -68,6 +67,17 @@ function StatCard({ title, value, subtitle, icon: Icon, color }: { title: string
 }
 
 function AttendanceDetailModal({ course, onClose }: { course: CourseAttendance; onClose: () => void }) {
+  // Cargar registros de asistencia detallados para este curso
+  const { data: recordsData, isLoading: loadingRecords } = useQuery({
+    queryKey: ['course-attendance-records', course._id, course.date],
+    queryFn: async () => {
+      const response = await api.get(`/attendance/course/${course._id}`, { params: { date: course.date } })
+      return response.data.data as AttendanceRecord[]
+    },
+  })
+
+  const attendanceRecords = recordsData || []
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'present': return <Check className="w-4 h-4 text-green-600" />
@@ -89,7 +99,7 @@ function AttendanceDetailModal({ course, onClose }: { course: CourseAttendance; 
     return <Badge className={styles[status as keyof typeof styles]}>{labels[status as keyof typeof labels]}</Badge>
   }
 
-  const attendanceRate = ((course.present + course.justified) / course.total * 100).toFixed(1)
+  const attendanceRate = course.total > 0 ? ((course.present + course.justified) / course.total * 100).toFixed(1) : '0.0'
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -134,30 +144,42 @@ function AttendanceDetailModal({ course, onClose }: { course: CourseAttendance; 
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="text-left p-3 font-medium text-gray-700">Estudiante</th>
-                  <th className="text-center p-3 font-medium text-gray-700">Estado</th>
-                  <th className="text-center p-3 font-medium text-gray-700">Hora</th>
-                  <th className="text-left p-3 font-medium text-gray-700">Observación</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mockAttendanceRecords.map((record) => (
-                  <tr key={record._id} className="border-b hover:bg-gray-50">
-                    <td className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-sanmartin-primary rounded-full flex items-center justify-center text-white text-sm font-bold">
-                          {record.student.firstName[0]}{record.student.lastName[0]}
+          {loadingRecords ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : attendanceRecords.length === 0 ? (
+            <div className="text-center py-12">
+              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No hay registros de asistencia para esta fecha.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="text-left p-3 font-medium text-gray-700">Estudiante</th>
+                    <th className="text-center p-3 font-medium text-gray-700">Estado</th>
+                    <th className="text-center p-3 font-medium text-gray-700">Hora</th>
+                    <th className="text-left p-3 font-medium text-gray-700">Observación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attendanceRecords.map((record) => (
+                    <tr key={record._id} className="border-b hover:bg-gray-50">
+                      <td className="p-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-sanmartin-primary rounded-full flex items-center justify-center text-white text-sm font-bold">
+                            {record.student.firstName?.[0]}{record.student.lastName?.[0]}
+                          </div>
+                          <div>
+                            <p className="font-medium">{record.student.firstName} {record.student.lastName}</p>
+                            <p className="text-xs text-gray-400">{record.student.enrollmentNumber}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">{record.student.firstName} {record.student.lastName}</p>
-                          <p className="text-xs text-gray-400">{record.student.enrollmentNumber}</p>
-                        </div>
-                      </div>
-                    </td>
+                      </td>
                     <td className="p-3 text-center">
                       <div className="flex items-center justify-center gap-2">
                         {getStatusIcon(record.status)}
@@ -175,6 +197,7 @@ function AttendanceDetailModal({ course, onClose }: { course: CourseAttendance; 
               </tbody>
             </table>
           </div>
+          )}
         </div>
       </div>
     </div>
@@ -187,23 +210,38 @@ export default function AttendancePage() {
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedCourse, setSelectedCourse] = useState<CourseAttendance | null>(null)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['attendance', searchTerm, selectedDate],
+  // Cargar estadísticas reales
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['attendance-stats', selectedDate],
     queryFn: async () => {
-      try {
-        const response = await api.get('/attendance', { params: { date: selectedDate } })
-        return response.data
-      } catch {
-        return null
-      }
+      const response = await api.get('/attendance/stats', { params: { date: selectedDate } })
+      return response.data.data as AttendanceStats
     },
   })
 
-  // Asegurar que siempre sea un array
-  const rawData = data?.data?.attendance || data?.data || data?.attendance || []
-  const attendanceData = Array.isArray(rawData) ? rawData : mockCourseAttendance
-  
-  const courses = attendanceData.filter((c: CourseAttendance) => 
+  // Cargar asistencia por curso
+  const { data: coursesData, isLoading: coursesLoading, error } = useQuery({
+    queryKey: ['attendance-by-course', selectedDate],
+    queryFn: async () => {
+      const response = await api.get('/attendance/by-course', { params: { date: selectedDate } })
+      return response.data.data as CourseAttendance[]
+    },
+  })
+
+  // Cargar alertas
+  const { data: alertsData } = useQuery({
+    queryKey: ['attendance-alerts'],
+    queryFn: async () => {
+      const response = await api.get('/attendance/alerts')
+      return response.data.data as AttendanceAlert[]
+    },
+  })
+
+  const stats = statsData || { totalStudents: 0, present: 0, absent: 0, late: 0, justified: 0, attendanceRate: 0 }
+  const allCourses = coursesData || []
+  const alerts = alertsData || []
+
+  const courses = allCourses.filter((c: CourseAttendance) => 
     `${c.courseName} ${c.gradeLevel} ${c.teacher}`.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -220,34 +258,51 @@ export default function AttendancePage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <StatCard title="Total Estudiantes" value={mockStats.totalToday} icon={Users} color="bg-blue-500" />
-        <StatCard title="Presentes" value={mockStats.presentToday} icon={UserCheck} color="bg-green-500" />
-        <StatCard title="Ausentes" value={mockStats.absentToday} icon={UserX} color="bg-red-500" />
-        <StatCard title="Tardanzas" value={mockStats.lateToday} icon={Clock} color="bg-yellow-500" />
-        <StatCard title="Tasa Asistencia" value={`${mockStats.attendanceRate}%`} icon={Calendar} color="bg-purple-500" />
+        <StatCard title="Total Estudiantes" value={stats.totalStudents} icon={Users} color="bg-blue-500" loading={statsLoading} />
+        <StatCard title="Presentes" value={stats.present} icon={UserCheck} color="bg-green-500" loading={statsLoading} />
+        <StatCard title="Ausentes" value={stats.absent} icon={UserX} color="bg-red-500" loading={statsLoading} />
+        <StatCard title="Tardanzas" value={stats.late} icon={Clock} color="bg-yellow-500" loading={statsLoading} />
+        <StatCard title="Tasa Asistencia" value={`${stats.attendanceRate?.toFixed(1) || 0}%`} icon={Calendar} color="bg-purple-500" loading={statsLoading} />
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-red-500" />
-            Alertas de Hoy
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="destructive" className="flex items-center gap-1">
-              <UserX className="w-3 h-3" /> 3 estudiantes con 3+ faltas consecutivas
-            </Badge>
-            <Badge variant="outline" className="flex items-center gap-1 border-yellow-500 text-yellow-700">
-              <Clock className="w-3 h-3" /> 5 estudiantes con tardanzas frecuentes
-            </Badge>
-            <Badge variant="outline" className="flex items-center gap-1 border-blue-500 text-blue-700">
-              <FileText className="w-3 h-3" /> 2 justificaciones pendientes de revisión
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4 flex items-center gap-2 text-red-600">
+            <AlertCircle className="w-5 h-5" />
+            <span>Error al cargar la asistencia. Por favor, intenta de nuevo.</span>
+          </CardContent>
+        </Card>
+      )}
+
+      {alerts.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              Alertas de Hoy
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="flex flex-wrap gap-2">
+              {alerts.map((alert, i) => (
+                <Badge 
+                  key={i}
+                  variant={alert.type === 'consecutive_absences' ? 'destructive' : 'outline'} 
+                  className={`flex items-center gap-1 ${
+                    alert.type === 'frequent_lates' ? 'border-yellow-500 text-yellow-700' : 
+                    alert.type === 'pending_justifications' ? 'border-blue-500 text-blue-700' : ''
+                  }`}
+                >
+                  {alert.type === 'consecutive_absences' && <UserX className="w-3 h-3" />}
+                  {alert.type === 'frequent_lates' && <Clock className="w-3 h-3" />}
+                  {alert.type === 'pending_justifications' && <FileText className="w-3 h-3" />}
+                  {alert.message || `${alert.count} alertas`}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="p-4">
@@ -261,16 +316,26 @@ export default function AttendancePage() {
         </CardContent>
       </Card>
 
-      {isLoading ? (
+      {coursesLoading ? (
         <div className="space-y-4">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i}><CardContent className="p-6"><Skeleton className="h-20 w-full" /></CardContent></Card>
           ))}
         </div>
+      ) : courses.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No hay registros</h3>
+            <p className="text-gray-500 mb-4">
+              {searchTerm ? 'No se encontraron cursos con los filtros seleccionados.' : 'No hay registros de asistencia para esta fecha.'}
+            </p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {courses.map((course: CourseAttendance) => {
-            const attendanceRate = ((course.present + course.justified) / course.total * 100).toFixed(1)
+            const attendanceRate = course.total > 0 ? ((course.present + course.justified) / course.total * 100).toFixed(1) : '0.0'
             return (
               <Card key={course._id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => { setSelectedCourse(course); setShowDetailModal(true); }}>
                 <CardContent className="p-6">
@@ -288,19 +353,19 @@ export default function AttendancePage() {
                   
                   <div className="grid grid-cols-4 gap-2">
                     <div className="text-center p-2 bg-green-50 rounded-lg">
-                      <p className="text-lg font-bold text-green-600">{course.present}</p>
+                      <p className="text-lg font-bold text-green-600">{course.present || 0}</p>
                       <p className="text-xs text-gray-500">Presentes</p>
                     </div>
                     <div className="text-center p-2 bg-red-50 rounded-lg">
-                      <p className="text-lg font-bold text-red-600">{course.absent}</p>
+                      <p className="text-lg font-bold text-red-600">{course.absent || 0}</p>
                       <p className="text-xs text-gray-500">Ausentes</p>
                     </div>
                     <div className="text-center p-2 bg-yellow-50 rounded-lg">
-                      <p className="text-lg font-bold text-yellow-600">{course.late}</p>
+                      <p className="text-lg font-bold text-yellow-600">{course.late || 0}</p>
                       <p className="text-xs text-gray-500">Tardanzas</p>
                     </div>
                     <div className="text-center p-2 bg-blue-50 rounded-lg">
-                      <p className="text-lg font-bold text-blue-600">{course.justified}</p>
+                      <p className="text-lg font-bold text-blue-600">{course.justified || 0}</p>
                       <p className="text-xs text-gray-500">Justificados</p>
                     </div>
                   </div>

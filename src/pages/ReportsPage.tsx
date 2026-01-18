@@ -1,7 +1,10 @@
 import { useState } from 'react'
-import { FileSpreadsheet, Download, TrendingUp, TrendingDown, Users, BookOpen, Calendar, BarChart3, PieChart, Award, Clock, Filter } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { FileSpreadsheet, Download, TrendingUp, TrendingDown, Users, BookOpen, Calendar, BarChart3, PieChart, Award, Clock, Filter, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import api from '@/services/api'
 
 interface ReportType {
   id: string
@@ -13,6 +16,21 @@ interface ReportType {
   lastGenerated?: string
 }
 
+interface ReportMetrics {
+  avgScore: number
+  attendanceRate: number
+  passingRate: number
+  excellentStudents: number
+  totalStudents: number
+  totalCourses: number
+}
+
+interface TopCourse {
+  name: string
+  avg: number
+  change: string
+}
+
 const reportTypes: ReportType[] = [
   { id: 'academic', title: 'Rendimiento Académico', description: 'Notas por curso, grado y período. Promedios y tendencias.', icon: BookOpen, color: 'bg-blue-500', formats: ['PDF', 'Excel'], lastGenerated: '2024-01-15' },
   { id: 'attendance', title: 'Asistencia General', description: 'Estadísticas de asistencia por aula, mes y estudiante.', icon: Calendar, color: 'bg-green-500', formats: ['PDF', 'Excel'], lastGenerated: '2024-01-14' },
@@ -22,27 +40,54 @@ const reportTypes: ReportType[] = [
   { id: 'comparative', title: 'Análisis Comparativo', description: 'Comparación entre períodos, años y secciones.', icon: PieChart, color: 'bg-pink-500', formats: ['PDF'] },
 ]
 
-const mockMetrics = [
-  { label: 'Promedio General', value: '14.7', trend: 'up', change: '+0.3' },
-  { label: 'Tasa de Asistencia', value: '95.8%', trend: 'up', change: '+1.2%' },
-  { label: 'Tasa de Aprobación', value: '89%', trend: 'down', change: '-2%' },
-  { label: 'Estudiantes Destacados', value: '124', trend: 'up', change: '+12' },
-]
-
-const mockTopCourses = [
-  { name: 'Inglés - 2° Secundaria B', avg: 15.6, change: '+0.8' },
-  { name: 'Comunicación - 3° Primaria A', avg: 15.2, change: '+0.4' },
-  { name: 'Matemáticas - 3° Primaria A', avg: 14.8, change: '+0.2' },
-]
-
-const mockLowCourses = [
-  { name: 'Ciencias - 4° Primaria B', avg: 13.5, change: '-0.5' },
-  { name: 'Historia - 1° Secundaria A', avg: 14.1, change: '-0.3' },
-]
-
 export default function ReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState('B1')
   const [selectedYear] = useState('2024')
+
+  // Cargar métricas reales
+  const { data: metricsData, isLoading: metricsLoading, error } = useQuery({
+    queryKey: ['report-metrics'],
+    queryFn: async () => {
+      const [gradesStats, attendanceStats, coursesStats] = await Promise.all([
+        api.get('/grades/stats'),
+        api.get('/attendance/stats'),
+        api.get('/courses/stats')
+      ])
+      return {
+        avgScore: gradesStats.data.data?.avgScore || 0,
+        attendanceRate: attendanceStats.data.data?.attendanceRate || 0,
+        passingRate: gradesStats.data.data?.passingRate || 0,
+        excellentStudents: gradesStats.data.data?.excellentStudents || 0,
+        totalStudents: coursesStats.data.data?.totalStudents || 0,
+        totalCourses: coursesStats.data.data?.totalCourses || 0,
+      } as ReportMetrics
+    },
+  })
+
+  // Cargar cursos con mejores y peores rendimientos
+  const { data: coursesData } = useQuery({
+    queryKey: ['report-courses-performance'],
+    queryFn: async () => {
+      const response = await api.get('/grades/by-course')
+      const courses = response.data.data || []
+      const sorted = [...courses].sort((a: TopCourse, b: TopCourse) => (b.avg || 0) - (a.avg || 0))
+      return {
+        top: sorted.slice(0, 3).map((c: TopCourse) => ({ name: c.name, avg: c.avg || 0, change: '+0.0' })),
+        low: sorted.slice(-2).reverse().map((c: TopCourse) => ({ name: c.name, avg: c.avg || 0, change: '-0.0' })),
+      }
+    },
+  })
+
+  const metrics = metricsData || { avgScore: 0, attendanceRate: 0, passingRate: 0, excellentStudents: 0, totalStudents: 0, totalCourses: 0 }
+  const topCourses = coursesData?.top || []
+  const lowCourses = coursesData?.low || []
+
+  const metricCards = [
+    { label: 'Promedio General', value: metrics.avgScore?.toFixed(1) || '0.0', trend: 'up', change: '+0.0' },
+    { label: 'Tasa de Asistencia', value: `${metrics.attendanceRate?.toFixed(1) || 0}%`, trend: 'up', change: '+0.0%' },
+    { label: 'Tasa de Aprobación', value: `${metrics.passingRate || 0}%`, trend: 'up', change: '+0.0%' },
+    { label: 'Estudiantes Destacados', value: metrics.excellentStudents || 0, trend: 'up', change: '+0' },
+  ]
 
   return (
     <div className="space-y-6">
@@ -63,8 +108,17 @@ export default function ReportsPage() {
         </div>
       </div>
 
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4 flex items-center gap-2 text-red-600">
+            <AlertCircle className="w-5 h-5" />
+            <span>Error al cargar las estadísticas. Por favor, intenta de nuevo.</span>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {mockMetrics.map((metric) => (
+        {metricCards.map((metric) => (
           <Card key={metric.label}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -74,7 +128,11 @@ export default function ReportsPage() {
                   {metric.change}
                 </div>
               </div>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{metric.value}</p>
+              {metricsLoading ? (
+                <Skeleton className="h-9 w-24 mt-2" />
+              ) : (
+                <p className="text-3xl font-bold text-gray-900 mt-2">{metric.value}</p>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -113,15 +171,17 @@ export default function ReportsPage() {
                   <TrendingUp className="w-4 h-4 text-green-500" />Mejores Rendimientos
                 </h4>
                 <div className="space-y-2">
-                  {mockTopCourses.map((course) => (
+                  {topCourses.length > 0 ? topCourses.map((course: TopCourse) => (
                     <div key={course.name} className="flex items-center justify-between p-2 bg-green-50 rounded-lg">
                       <span className="text-sm truncate flex-1">{course.name}</span>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-green-700">{course.avg}</span>
+                        <span className="font-bold text-green-700">{course.avg?.toFixed(1)}</span>
                         <span className="text-xs text-green-600">{course.change}</span>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <p className="text-sm text-gray-400 italic">Sin datos</p>
+                  )}
                 </div>
               </div>
               <div>
@@ -129,15 +189,17 @@ export default function ReportsPage() {
                   <TrendingDown className="w-4 h-4 text-red-500" />Requieren Atención
                 </h4>
                 <div className="space-y-2">
-                  {mockLowCourses.map((course) => (
+                  {lowCourses.length > 0 ? lowCourses.map((course: TopCourse) => (
                     <div key={course.name} className="flex items-center justify-between p-2 bg-red-50 rounded-lg">
                       <span className="text-sm truncate flex-1">{course.name}</span>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-red-700">{course.avg}</span>
+                        <span className="font-bold text-red-700">{course.avg?.toFixed(1)}</span>
                         <span className="text-xs text-red-600">{course.change}</span>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <p className="text-sm text-gray-400 italic">Sin datos</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -172,11 +234,19 @@ export default function ReportsPage() {
             <div className="mt-6 pt-6 border-t">
               <div className="grid grid-cols-2 gap-4 text-center">
                 <div className="p-3 bg-gray-50 rounded-xl">
-                  <p className="text-2xl font-bold text-sanmartin-primary">847</p>
+                  {metricsLoading ? (
+                    <Skeleton className="h-8 w-16 mx-auto" />
+                  ) : (
+                    <p className="text-2xl font-bold text-sanmartin-primary">{metrics.totalStudents}</p>
+                  )}
                   <p className="text-xs text-gray-500">Total Estudiantes</p>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-xl">
-                  <p className="text-2xl font-bold text-sanmartin-primary">89%</p>
+                  {metricsLoading ? (
+                    <Skeleton className="h-8 w-16 mx-auto" />
+                  ) : (
+                    <p className="text-2xl font-bold text-sanmartin-primary">{metrics.passingRate}%</p>
+                  )}
                   <p className="text-xs text-gray-500">Aprobados</p>
                 </div>
               </div>
