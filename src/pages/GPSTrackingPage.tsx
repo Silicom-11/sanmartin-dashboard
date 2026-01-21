@@ -1,10 +1,66 @@
-import { useState, useEffect, useCallback } from 'react'
-import { MapPin, Shield, Bell, Search, Users, Navigation, Clock, AlertTriangle, CheckCircle, Eye, X, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { MapPin, Shield, Bell, Search, Users, Navigation, Clock, AlertTriangle, CheckCircle, Eye, X, RefreshCw, Wifi, WifiOff, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { locationService } from '@/services/api'
+
+// Leaflet imports
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+// Fix Leaflet default icons
+delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+})
+
+// Custom icons
+const createCustomIcon = (color: string, isOnline: boolean) => {
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `
+      <div style="
+        background: ${color};
+        width: 36px;
+        height: 36px;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      ">
+        <div style="
+          transform: rotate(45deg);
+          color: white;
+          font-weight: bold;
+          font-size: 14px;
+        ">📍</div>
+        ${isOnline ? `<div style="
+          position: absolute;
+          top: -2px;
+          right: -2px;
+          width: 12px;
+          height: 12px;
+          background: #22c55e;
+          border-radius: 50%;
+          border: 2px solid white;
+          transform: rotate(45deg);
+        "></div>` : ''}
+      </div>
+    `,
+    iconSize: [36, 36],
+    iconAnchor: [18, 36],
+    popupAnchor: [0, -36],
+  })
+}
 
 interface StudentLocationData {
   user: {
@@ -42,6 +98,22 @@ interface LocationStats {
   timestamp: string
 }
 
+// Component to fit map to markers
+function FitBounds({ students }: { students: StudentLocationData[] }) {
+  const map = useMap()
+  
+  useEffect(() => {
+    if (students.length > 0) {
+      const bounds = L.latLngBounds(
+        students.map(s => [s.location.latitude, s.location.longitude] as L.LatLngTuple)
+      )
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
+    }
+  }, [students, map])
+  
+  return null
+}
+
 function StudentDetailModal({ student, onClose }: { student: StudentLocationData; onClose: () => void }) {
   const openInGoogleMaps = () => {
     const { latitude, longitude } = student.location
@@ -62,7 +134,7 @@ function StudentDetailModal({ student, onClose }: { student: StudentLocationData
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl">
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-3">
@@ -128,7 +200,7 @@ function StudentDetailModal({ student, onClose }: { student: StudentLocationData
               className="flex-1 bg-sanmartin-primary hover:bg-sanmartin-primary-dark"
               onClick={openInGoogleMaps}
             >
-              <Navigation className="w-4 h-4 mr-2" />Ver en Google Maps
+              <ExternalLink className="w-4 h-4 mr-2" />Ver en Google Maps
             </Button>
           </div>
         </div>
@@ -137,16 +209,15 @@ function StudentDetailModal({ student, onClose }: { student: StudentLocationData
   )
 }
 
-function StatCard({ title, value, icon: Icon, color, alert, loading }: { 
+function StatCard({ title, value, icon: Icon, color, loading }: { 
   title: string
   value: number
   icon: React.ElementType
   color: string
-  alert?: boolean
   loading?: boolean
 }) {
   return (
-    <Card className={alert ? 'border-red-300 bg-red-50' : ''}>
+    <Card>
       <CardContent className="p-6">
         <div className="flex items-center justify-between">
           <div>
@@ -154,7 +225,7 @@ function StatCard({ title, value, icon: Icon, color, alert, loading }: {
             {loading ? (
               <div className="h-8 w-16 bg-gray-200 animate-pulse rounded mt-1" />
             ) : (
-              <p className={`text-2xl font-bold mt-1 ${alert ? 'text-red-600' : 'text-gray-900'}`}>{value}</p>
+              <p className="text-2xl font-bold mt-1 text-gray-900">{value}</p>
             )}
           </div>
           <div className={`p-3 rounded-xl ${color}`}><Icon className="w-6 h-6 text-white" /></div>
@@ -175,13 +246,15 @@ export default function GPSTrackingPage() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
+  // Default center: Lima, Peru
+  const defaultCenter: [number, number] = [-12.0464, -77.0428]
+
   const loadData = useCallback(async () => {
     try {
       setError(null)
       
-      // Cargar ubicaciones y estadísticas en paralelo
       const [locationsRes, statsRes] = await Promise.all([
-        locationService.getStudentLocations(60), // Últimos 60 minutos
+        locationService.getStudentLocations(60),
         locationService.getLocationStats(),
       ])
 
@@ -205,7 +278,6 @@ export default function GPSTrackingPage() {
   useEffect(() => {
     loadData()
 
-    // Auto-refresh cada 30 segundos
     let interval: NodeJS.Timeout
     if (autoRefresh) {
       interval = setInterval(loadData, 30000)
@@ -240,6 +312,16 @@ export default function GPSTrackingPage() {
 
   const onlineCount = students.filter(s => s.isOnline).length
   const offlineCount = students.filter(s => !s.isOnline).length
+
+  // Calculate map center based on students
+  const mapCenter = useMemo(() => {
+    if (students.length > 0) {
+      const avgLat = students.reduce((sum, s) => sum + s.location.latitude, 0) / students.length
+      const avgLng = students.reduce((sum, s) => sum + s.location.longitude, 0) / students.length
+      return [avgLat, avgLng] as [number, number]
+    }
+    return defaultCenter
+  }, [students])
 
   return (
     <div className="space-y-6">
@@ -289,63 +371,92 @@ export default function GPSTrackingPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard 
-          title="En Línea" 
-          value={onlineCount} 
-          icon={Wifi} 
-          color="bg-green-500" 
-          loading={loading}
-        />
-        <StatCard 
-          title="Desconectados" 
-          value={offlineCount} 
-          icon={WifiOff} 
-          color="bg-gray-500" 
-          loading={loading}
-        />
-        <StatCard 
-          title="Usuarios Activos (30m)" 
-          value={stats?.totalActiveUsers || 0} 
-          icon={Users} 
-          color="bg-blue-500" 
-          loading={loading}
-        />
-        <StatCard 
-          title="Registros Hoy" 
-          value={stats?.locationRecordsToday || 0} 
-          icon={MapPin} 
-          color="bg-purple-500" 
-          loading={loading}
-        />
+        <StatCard title="En Línea" value={onlineCount} icon={Wifi} color="bg-green-500" loading={loading} />
+        <StatCard title="Desconectados" value={offlineCount} icon={WifiOff} color="bg-gray-500" loading={loading} />
+        <StatCard title="Usuarios Activos (30m)" value={stats?.totalActiveUsers || 0} icon={Users} color="bg-blue-500" loading={loading} />
+        <StatCard title="Registros Hoy" value={stats?.locationRecordsToday || 0} icon={MapPin} color="bg-purple-500" loading={loading} />
       </div>
 
-      {/* Main Content */}
+      {/* Main Content - Map */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Map Placeholder */}
         <div className="lg:col-span-2">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle>Mapa en Tiempo Real</CardTitle>
-              <CardDescription>
-                {students.length} estudiantes con ubicación registrada
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="aspect-video bg-gradient-to-br from-blue-50 to-green-50 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-200">
-                <div className="text-center p-8">
-                  <div className="w-20 h-20 bg-sanmartin-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <MapPin className="w-10 h-10 text-sanmartin-primary" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-700">Mapa Interactivo</h3>
-                  <p className="text-gray-500 mt-2 max-w-md">
-                    Las ubicaciones se pueden abrir en <strong>Google Maps</strong> haciendo clic en "Ver" de cada estudiante.
-                  </p>
-                  <div className="flex justify-center gap-4 mt-4">
-                    <Badge variant="outline" className="bg-white">🟢 {onlineCount} En línea</Badge>
-                    <Badge variant="outline" className="bg-white">⚪ {offlineCount} Desconectados</Badge>
-                  </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Mapa en Tiempo Real</CardTitle>
+                  <CardDescription>
+                    {students.length} estudiantes con ubicación registrada
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Badge variant="outline" className="bg-green-50 border-green-300">🟢 {onlineCount} En línea</Badge>
+                  <Badge variant="outline" className="bg-gray-50">⚪ {offlineCount} Offline</Badge>
                 </div>
               </div>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-xl overflow-hidden border border-gray-200" style={{ height: '450px' }}>
+                <MapContainer
+                  center={mapCenter}
+                  zoom={13}
+                  style={{ height: '100%', width: '100%' }}
+                  scrollWheelZoom={true}
+                >
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  
+                  {students.length > 0 && <FitBounds students={students} />}
+                  
+                  {students.map((student, index) => (
+                    <Marker
+                      key={student.user._id || index}
+                      position={[student.location.latitude, student.location.longitude]}
+                      icon={createCustomIcon(student.isOnline ? '#22c55e' : '#6b7280', student.isOnline)}
+                    >
+                      <Popup>
+                        <div className="min-w-[200px]">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${student.isOnline ? 'bg-green-500' : 'bg-gray-500'}`}>
+                              {student.user.firstName[0]}{student.user.lastName[0]}
+                            </div>
+                            <div>
+                              <p className="font-semibold text-sm">{student.user.firstName} {student.user.lastName}</p>
+                              <p className="text-xs text-gray-500">
+                                {student.student ? `${student.student.gradeLevel} - ${student.student.section}` : 'Estudiante'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-xs space-y-1 mb-2">
+                            <p className={`font-medium ${student.isOnline ? 'text-green-600' : 'text-gray-500'}`}>
+                              {student.isOnline ? '🟢 En línea' : '⚪ Desconectado'}
+                            </p>
+                            <p className="text-gray-500">📍 {student.location.latitude.toFixed(5)}, {student.location.longitude.toFixed(5)}</p>
+                            <p className="text-gray-400">🕐 {formatTimeAgo(student.lastUpdate)}</p>
+                          </div>
+                          <button 
+                            onClick={() => setSelectedStudent(student)}
+                            className="w-full bg-blue-500 text-white text-xs py-1.5 px-3 rounded hover:bg-blue-600 transition"
+                          >
+                            Ver detalles
+                          </button>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
+                </MapContainer>
+              </div>
+              
+              {students.length === 0 && !loading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 rounded-xl">
+                  <div className="text-center">
+                    <MapPin className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                    <p className="text-gray-500">No hay ubicaciones registradas</p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -404,6 +515,11 @@ export default function GPSTrackingPage() {
                   🔒 Solo los administradores pueden ver las ubicaciones de los estudiantes.
                 </p>
               </div>
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-700">
+                  🗺️ Haz clic en un marcador para ver detalles o abrir en Google Maps.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -418,11 +534,7 @@ export default function GPSTrackingPage() {
               Estudiantes Monitoreados ({students.length})
             </CardTitle>
             <div className="flex gap-2">
-              <Button 
-                variant={statusFilter === 'all' ? 'default' : 'outline'} 
-                size="sm" 
-                onClick={() => setStatusFilter('all')}
-              >
+              <Button variant={statusFilter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setStatusFilter('all')}>
                 Todos
               </Button>
               <Button 
@@ -433,11 +545,7 @@ export default function GPSTrackingPage() {
               >
                 <Wifi className="w-3 h-3 mr-1" /> En línea ({onlineCount})
               </Button>
-              <Button 
-                variant={statusFilter === 'offline' ? 'default' : 'outline'} 
-                size="sm" 
-                onClick={() => setStatusFilter('offline')}
-              >
+              <Button variant={statusFilter === 'offline' ? 'default' : 'outline'} size="sm" onClick={() => setStatusFilter('offline')}>
                 <WifiOff className="w-3 h-3 mr-1" /> Offline ({offlineCount})
               </Button>
             </div>
@@ -447,12 +555,7 @@ export default function GPSTrackingPage() {
           <div className="mb-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input 
-                placeholder="Buscar estudiante por nombre..." 
-                value={searchTerm} 
-                onChange={(e) => setSearchTerm(e.target.value)} 
-                className="pl-10" 
-              />
+              <Input placeholder="Buscar estudiante por nombre..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
             </div>
           </div>
 
@@ -466,27 +569,24 @@ export default function GPSTrackingPage() {
             <div className="text-center py-12 text-gray-500">
               <MapPin className="w-12 h-12 mx-auto mb-4 text-gray-300" />
               <p className="font-medium">No hay estudiantes con ubicación registrada</p>
-              <p className="text-sm mt-1">
-                Las ubicaciones aparecerán cuando los estudiantes inicien sesión en la app móvil.
-              </p>
+              <p className="text-sm mt-1">Las ubicaciones aparecerán cuando los estudiantes inicien sesión en la app móvil.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {filteredStudents.map((student, index) => (
                 <div 
                   key={student.user._id || index} 
-                  className={`flex items-center justify-between p-4 rounded-xl border ${
+                  className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer hover:shadow-md transition ${
                     student.isOnline ? 'bg-green-50 border-green-200' : 'bg-gray-50'
                   }`}
+                  onClick={() => setSelectedStudent(student)}
                 >
                   <div className="flex items-center gap-4">
                     <div className="relative">
                       <div className="w-10 h-10 bg-sanmartin-primary rounded-full flex items-center justify-center text-white font-bold">
                         {student.user.firstName[0]}{student.user.lastName[0]}
                       </div>
-                      <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
-                        student.isOnline ? 'bg-green-500' : 'bg-gray-400'
-                      }`} />
+                      <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${student.isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
                     </div>
                     <div>
                       <p className="font-semibold">{student.user.firstName} {student.user.lastName}</p>
@@ -506,13 +606,9 @@ export default function GPSTrackingPage() {
                       </p>
                     </div>
                     <Badge className={student.isOnline ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}>
-                      {student.isOnline ? (
-                        <><Wifi className="w-3 h-3 mr-1" /> En línea</>
-                      ) : (
-                        <><WifiOff className="w-3 h-3 mr-1" /> Offline</>
-                      )}
+                      {student.isOnline ? <><Wifi className="w-3 h-3 mr-1" /> En línea</> : <><WifiOff className="w-3 h-3 mr-1" /> Offline</>}
                     </Badge>
-                    <Button variant="ghost" size="sm" onClick={() => setSelectedStudent(student)}>
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setSelectedStudent(student); }}>
                       <Eye className="w-4 h-4" />
                     </Button>
                   </div>
@@ -525,10 +621,7 @@ export default function GPSTrackingPage() {
 
       {/* Student Detail Modal */}
       {selectedStudent && (
-        <StudentDetailModal 
-          student={selectedStudent} 
-          onClose={() => setSelectedStudent(null)} 
-        />
+        <StudentDetailModal student={selectedStudent} onClose={() => setSelectedStudent(null)} />
       )}
     </div>
   )
