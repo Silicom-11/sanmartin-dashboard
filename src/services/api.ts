@@ -445,4 +445,41 @@ export const dashboardService = {
   },
 }
 
+// ============ LOCATION / GPS TRACKING SERVICES ============
+
+export const locationService = {
+  // Obtener ubicaciones de todos los estudiantes
+  getStudentLocations: async (minutes: number = 30) => {
+    const response = await api.get(`/location/students?minutes=${minutes}`)
+    return response.data
+  },
+  
+  // Obtener usuarios online
+  getOnlineUsers: async (role?: string, minutes: number = 5) => {
+    const params = new URLSearchParams()
+    if (role) params.append('role', role)
+    params.append('minutes', minutes.toString())
+    const response = await api.get(`/location/users/online?${params}`)
+    return response.data
+  },
+  
+  // Obtener estadísticas de ubicación
+  getLocationStats: async () => {
+    const response = await api.get('/location/stats')
+    return response.data
+  },
+  
+  // Obtener ubicación de un usuario específico
+  getUserLocation: async (userId: string) => {
+    const response = await api.get(`/location/user/${userId}`)
+    return response.data
+  },
+  
+  // Obtener historial de ubicaciones de un usuario
+  getUserLocationHistory: async (userId: string, hours: number = 24) => {
+    const response = await api.get(`/location/user/${userId}/history?hours=${hours}`)
+    return response.data
+  },
+}
+
 export default api
