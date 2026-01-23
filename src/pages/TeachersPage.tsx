@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
   Plus, Search, Eye, Edit, Mail, Phone, BookOpen, 
   Users, Check, Clock, X, Award, Loader2, Trash2,
-  GraduationCap, Building, RefreshCw, Key, ChevronDown
+  GraduationCap, Building, RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,8 +44,8 @@ interface TeacherFormData {
   secondarySpecialties: string[]
   educationLevel: string
   university: string
-  contractType: string
-  workSchedule: string
+  contractType: 'nombrado' | 'contratado' | 'practicante'
+  workSchedule: 'completo' | 'parcial'
   password?: string
 }
 
