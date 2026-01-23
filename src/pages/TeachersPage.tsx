@@ -183,7 +183,7 @@ function TeacherModal({ teacher, onClose, onSave, isLoading }: { teacher?: Teach
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Contrato</label>
-                <select value={formData.contractType} onChange={(e) => setFormData({...formData, contractType: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg" disabled={isLoading}>
+                <select value={formData.contractType} onChange={(e) => setFormData({...formData, contractType: e.target.value as 'nombrado' | 'contratado' | 'practicante'})} className="w-full px-3 py-2 border border-gray-300 rounded-lg" disabled={isLoading}>
                   <option value="contratado">Contratado</option>
                   <option value="nombrado">Nombrado</option>
                   <option value="practicante">Practicante</option>
@@ -191,7 +191,7 @@ function TeacherModal({ teacher, onClose, onSave, isLoading }: { teacher?: Teach
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Horario</label>
-                <select value={formData.workSchedule} onChange={(e) => setFormData({...formData, workSchedule: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg" disabled={isLoading}>
+                <select value={formData.workSchedule} onChange={(e) => setFormData({...formData, workSchedule: e.target.value as 'completo' | 'parcial'})} className="w-full px-3 py-2 border border-gray-300 rounded-lg" disabled={isLoading}>
                   <option value="completo">Tiempo Completo</option>
                   <option value="parcial">Tiempo Parcial</option>
                 </select>
