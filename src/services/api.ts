@@ -482,4 +482,218 @@ export const locationService = {
   },
 }
 
+// ============ TEACHERS SERVICES (Nueva Colección) ============
+
+export const teachersService = {
+  // Obtener todos los docentes con paginación
+  getAll: async (params?: {
+    page?: number
+    limit?: number
+    search?: string
+    specialty?: string
+    isActive?: boolean
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+  }) => {
+    const response = await api.get('/teachers', { params })
+    return response.data
+  },
+  
+  // Estadísticas del panel
+  getStats: async () => {
+    const response = await api.get('/teachers/stats')
+    return response.data
+  },
+  
+  // Obtener un docente por ID
+  getById: async (id: string) => {
+    const response = await api.get(`/teachers/${id}`)
+    return response.data
+  },
+  
+  // Crear nuevo docente
+  create: async (data: {
+    firstName: string
+    lastName: string
+    dni: string
+    email: string
+    password?: string
+    phone?: string
+    birthDate?: string
+    gender?: 'Masculino' | 'Femenino'
+    address?: string
+    specialty: string
+    secondarySpecialties?: string[]
+    educationLevel?: string
+    university?: string
+    contractType?: 'nombrado' | 'contratado' | 'practicante'
+    workSchedule?: 'completo' | 'parcial'
+    hireDate?: string
+  }) => {
+    const response = await api.post('/teachers', data)
+    return response.data
+  },
+  
+  // Actualizar docente
+  update: async (id: string, data: Partial<{
+    firstName: string
+    lastName: string
+    phone: string
+    address: string
+    specialty: string
+    secondarySpecialties: string[]
+    educationLevel: string
+    university: string
+    contractType: string
+    workSchedule: string
+    isActive: boolean
+  }>) => {
+    const response = await api.put(`/teachers/${id}`, data)
+    return response.data
+  },
+  
+  // Eliminar docente (soft delete)
+  delete: async (id: string, permanent: boolean = false) => {
+    const response = await api.delete(`/teachers/${id}`, { params: { permanent } })
+    return response.data
+  },
+  
+  // Reactivar docente
+  reactivate: async (id: string) => {
+    const response = await api.post(`/teachers/${id}/reactivate`)
+    return response.data
+  },
+  
+  // Cambiar contraseña
+  changePassword: async (id: string, newPassword: string) => {
+    const response = await api.put(`/teachers/${id}/password`, { newPassword })
+    return response.data
+  },
+  
+  // Asignar curso
+  assignCourse: async (id: string, courseId: string, role?: 'titular' | 'auxiliar') => {
+    const response = await api.post(`/teachers/${id}/courses`, { courseId, role })
+    return response.data
+  },
+  
+  // Remover curso
+  removeCourse: async (id: string, courseId: string) => {
+    const response = await api.delete(`/teachers/${id}/courses/${courseId}`)
+    return response.data
+  },
+}
+
+// ============ PARENTS MANAGEMENT SERVICES (Nueva Colección) ============
+
+export const parentsService = {
+  // Obtener todos los padres con paginación
+  getAll: async (params?: {
+    page?: number
+    limit?: number
+    search?: string
+    hasChildren?: boolean
+    isActive?: boolean
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+  }) => {
+    const response = await api.get('/parents-management', { params })
+    return response.data
+  },
+  
+  // Estadísticas del panel
+  getStats: async () => {
+    const response = await api.get('/parents-management/stats')
+    return response.data
+  },
+  
+  // Buscar estudiantes para vincular
+  searchStudents: async (search: string) => {
+    const response = await api.get('/parents-management/search-students', { params: { search } })
+    return response.data
+  },
+  
+  // Obtener un padre por ID
+  getById: async (id: string) => {
+    const response = await api.get(`/parents-management/${id}`)
+    return response.data
+  },
+  
+  // Crear nuevo padre
+  create: async (data: {
+    firstName: string
+    lastName: string
+    dni: string
+    email: string
+    password?: string
+    phone?: string
+    secondaryPhone?: string
+    address?: string
+    birthDate?: string
+    gender?: 'Masculino' | 'Femenino'
+    occupation?: string
+    workplace?: string
+    children?: Array<{
+      studentId: string
+      relationship: string
+      isPrimaryContact?: boolean
+      canPickUp?: boolean
+      isEmergencyContact?: boolean
+    }>
+  }) => {
+    const response = await api.post('/parents-management', data)
+    return response.data
+  },
+  
+  // Actualizar padre
+  update: async (id: string, data: Partial<{
+    firstName: string
+    lastName: string
+    phone: string
+    secondaryPhone: string
+    address: string
+    occupation: string
+    workplace: string
+    isActive: boolean
+  }>) => {
+    const response = await api.put(`/parents-management/${id}`, data)
+    return response.data
+  },
+  
+  // Eliminar padre (soft delete)
+  delete: async (id: string, permanent: boolean = false) => {
+    const response = await api.delete(`/parents-management/${id}`, { params: { permanent } })
+    return response.data
+  },
+  
+  // Reactivar padre
+  reactivate: async (id: string) => {
+    const response = await api.post(`/parents-management/${id}/reactivate`)
+    return response.data
+  },
+  
+  // Cambiar contraseña
+  changePassword: async (id: string, newPassword: string) => {
+    const response = await api.put(`/parents-management/${id}/password`, { newPassword })
+    return response.data
+  },
+  
+  // Vincular hijo
+  addChild: async (id: string, childData: {
+    studentId: string
+    relationship: string
+    isPrimaryContact?: boolean
+    canPickUp?: boolean
+    isEmergencyContact?: boolean
+  }) => {
+    const response = await api.post(`/parents-management/${id}/children`, childData)
+    return response.data
+  },
+  
+  // Desvincular hijo
+  removeChild: async (id: string, studentId: string) => {
+    const response = await api.delete(`/parents-management/${id}/children/${studentId}`)
+    return response.data
+  },
+}
+
 export default api

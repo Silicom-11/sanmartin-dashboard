@@ -5,6 +5,7 @@ import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import StudentsPage from '@/pages/StudentsPage'
 import TeachersPage from '@/pages/TeachersPage'
+import ParentsPage from '@/pages/ParentsPage'
 import CoursesPage from '@/pages/CoursesPage'
 import GradesPage from '@/pages/GradesPage'
 import AttendancePage from '@/pages/AttendancePage'
@@ -45,6 +46,7 @@ function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="students" element={<StudentsPage />} />
         <Route path="teachers" element={<TeachersPage />} />
+        <Route path="parents" element={<ParentsPage />} />
         <Route path="courses" element={<CoursesPage />} />
         <Route path="grades" element={<GradesPage />} />
         <Route path="attendance" element={<AttendancePage />} />

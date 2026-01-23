@@ -20,12 +20,14 @@ import {
   X,
   Bell,
   ChevronDown,
+  UserCheck,
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Estudiantes', href: '/students', icon: GraduationCap },
   { name: 'Docentes', href: '/teachers', icon: Users },
+  { name: 'Padres', href: '/parents', icon: UserCheck },
   { name: 'Cursos', href: '/courses', icon: BookOpen },
   { name: 'Calificaciones', href: '/grades', icon: ClipboardList },
   { name: 'Asistencia', href: '/attendance', icon: CalendarCheck },
