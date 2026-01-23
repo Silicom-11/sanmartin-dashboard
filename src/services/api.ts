@@ -696,4 +696,139 @@ export const parentsService = {
   },
 }
 
+// ============ STUDENTS MANAGEMENT SERVICES (Nueva Colección con Auth) ============
+
+export const studentsManagementService = {
+  // Obtener todos los estudiantes con paginación
+  getAll: async (params?: {
+    page?: number
+    limit?: number
+    search?: string
+    gradeLevel?: string
+    section?: string
+    status?: string
+    gender?: string
+    hasParent?: boolean
+    isActive?: boolean
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+  }) => {
+    const response = await api.get('/students-management', { params })
+    return response.data
+  },
+  
+  // Estadísticas del panel
+  getStats: async () => {
+    const response = await api.get('/students-management/stats')
+    return response.data
+  },
+  
+  // Buscar padres para vincular
+  searchParents: async (search: string) => {
+    const response = await api.get('/students-management/search-parents', { params: { search } })
+    return response.data
+  },
+  
+  // Obtener un estudiante por ID
+  getById: async (id: string) => {
+    const response = await api.get(`/students-management/${id}`)
+    return response.data
+  },
+  
+  // Obtener información académica
+  getAcademic: async (id: string, year?: number) => {
+    const response = await api.get(`/students-management/${id}/academic`, { params: { year } })
+    return response.data
+  },
+  
+  // Crear nuevo estudiante
+  create: async (data: {
+    firstName: string
+    lastName: string
+    dni: string
+    email: string
+    password?: string
+    birthDate: string
+    gender: 'Masculino' | 'Femenino'
+    phone?: string
+    address?: {
+      street?: string
+      district?: string
+      city?: string
+      reference?: string
+    }
+    gradeLevel: string
+    section?: string
+    shift?: 'Mañana' | 'Tarde'
+    parentId?: string
+    parentSource?: 'parent' | 'user'
+    relationship?: string
+    medicalInfo?: {
+      bloodType?: string
+      allergies?: string[]
+      conditions?: string[]
+      medications?: string[]
+    }
+    previousSchool?: string
+  }) => {
+    const response = await api.post('/students-management', data)
+    return response.data
+  },
+  
+  // Actualizar estudiante
+  update: async (id: string, data: Partial<{
+    firstName: string
+    lastName: string
+    phone: string
+    address: object
+    photo: string
+    gradeLevel: string
+    section: string
+    shift: string
+    status: string
+    isActive: boolean
+    medicalInfo: object
+  }>) => {
+    const response = await api.put(`/students-management/${id}`, data)
+    return response.data
+  },
+  
+  // Eliminar estudiante (soft delete)
+  delete: async (id: string, permanent: boolean = false) => {
+    const response = await api.delete(`/students-management/${id}`, { params: { permanent } })
+    return response.data
+  },
+  
+  // Reactivar estudiante
+  reactivate: async (id: string) => {
+    const response = await api.post(`/students-management/${id}/reactivate`)
+    return response.data
+  },
+  
+  // Cambiar contraseña
+  changePassword: async (id: string, newPassword: string) => {
+    const response = await api.put(`/students-management/${id}/password`, { newPassword })
+    return response.data
+  },
+  
+  // Vincular padre/tutor
+  addGuardian: async (id: string, guardianData: {
+    parentId: string
+    parentSource: 'parent' | 'user'
+    relationship: string
+    isPrimary?: boolean
+    canPickUp?: boolean
+    emergencyContact?: boolean
+  }) => {
+    const response = await api.post(`/students-management/${id}/guardians`, guardianData)
+    return response.data
+  },
+  
+  // Desvincular padre/tutor
+  removeGuardian: async (id: string, guardianId: string) => {
+    const response = await api.delete(`/students-management/${id}/guardians/${guardianId}`)
+    return response.data
+  },
+}
+
 export default api
