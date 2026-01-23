@@ -44,8 +44,8 @@ interface TeacherFormData {
   secondarySpecialties: string[]
   educationLevel: string
   university: string
-  contractType: 'nombrado' | 'contratado' | 'practicante'
-  workSchedule: 'completo' | 'parcial'
+  contractType: 'Nombrado' | 'Contratado' | 'Tiempo Completo' | 'Tiempo Parcial'
+  workSchedule: 'Completo' | 'Mañana' | 'Tarde'
   password?: string
 }
 
@@ -78,8 +78,8 @@ function TeacherModal({ teacher, onClose, onSave, isLoading }: { teacher?: Teach
     secondarySpecialties: teacher?.secondarySpecialties || [],
     educationLevel: teacher?.educationLevel || '',
     university: teacher?.university || '',
-    contractType: teacher?.contractType || 'contratado',
-    workSchedule: teacher?.workSchedule || 'completo',
+    contractType: teacher?.contractType || 'Contratado',
+    workSchedule: teacher?.workSchedule || 'Completo',
     password: '',
   })
 
@@ -161,11 +161,11 @@ function TeacherModal({ teacher, onClose, onSave, isLoading }: { teacher?: Teach
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nivel de Educación</label>
                 <select value={formData.educationLevel} onChange={(e) => setFormData({...formData, educationLevel: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg" disabled={isLoading}>
                   <option value="">Seleccionar</option>
-                  <option value="licenciatura">Licenciatura</option>
-                  <option value="maestria">Maestría</option>
-                  <option value="doctorado">Doctorado</option>
-                  <option value="tecnico">Técnico</option>
-                  <option value="bachiller">Bachiller</option>
+                  <option value="Licenciatura">Licenciatura</option>
+                  <option value="Maestría">Maestría</option>
+                  <option value="Doctorado">Doctorado</option>
+                  <option value="Técnico">Técnico</option>
+                  <option value="Bachiller">Bachiller</option>
                 </select>
               </div>
               <div>
@@ -183,17 +183,19 @@ function TeacherModal({ teacher, onClose, onSave, isLoading }: { teacher?: Teach
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Contrato</label>
-                <select value={formData.contractType} onChange={(e) => setFormData({...formData, contractType: e.target.value as 'nombrado' | 'contratado' | 'practicante'})} className="w-full px-3 py-2 border border-gray-300 rounded-lg" disabled={isLoading}>
-                  <option value="contratado">Contratado</option>
-                  <option value="nombrado">Nombrado</option>
-                  <option value="practicante">Practicante</option>
+                <select value={formData.contractType} onChange={(e) => setFormData({...formData, contractType: e.target.value as 'Nombrado' | 'Contratado' | 'Tiempo Completo' | 'Tiempo Parcial'})} className="w-full px-3 py-2 border border-gray-300 rounded-lg" disabled={isLoading}>
+                  <option value="Contratado">Contratado</option>
+                  <option value="Nombrado">Nombrado</option>
+                  <option value="Tiempo Completo">Tiempo Completo</option>
+                  <option value="Tiempo Parcial">Tiempo Parcial</option>
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Horario</label>
-                <select value={formData.workSchedule} onChange={(e) => setFormData({...formData, workSchedule: e.target.value as 'completo' | 'parcial'})} className="w-full px-3 py-2 border border-gray-300 rounded-lg" disabled={isLoading}>
-                  <option value="completo">Tiempo Completo</option>
-                  <option value="parcial">Tiempo Parcial</option>
+                <select value={formData.workSchedule} onChange={(e) => setFormData({...formData, workSchedule: e.target.value as 'Completo' | 'Mañana' | 'Tarde'})} className="w-full px-3 py-2 border border-gray-300 rounded-lg" disabled={isLoading}>
+                  <option value="Completo">Tiempo Completo</option>
+                  <option value="Mañana">Turno Mañana</option>
+                  <option value="Tarde">Turno Tarde</option>
                 </select>
               </div>
             </div>
