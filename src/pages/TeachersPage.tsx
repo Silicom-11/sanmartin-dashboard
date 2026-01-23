@@ -277,7 +277,7 @@ function TeacherDetailModal({ teacher, onClose }: { teacher: Teacher; onClose: (
             </div>
             <div className="text-center p-4 bg-purple-50 rounded-xl">
               <Clock className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold">{teacher.workSchedule === 'completo' ? '40' : '20'}</p>
+              <p className="text-2xl font-bold">{teacher.workSchedule === 'Completo' ? '40' : '20'}</p>
               <p className="text-sm text-gray-500">Hrs/Semana</p>
             </div>
           </div>
