@@ -25,8 +25,8 @@ interface Teacher {
   educationLevel?: string
   university?: string
   employeeCode?: string
-  contractType?: 'nombrado' | 'contratado' | 'practicante'
-  workSchedule?: 'completo' | 'parcial'
+  contractType?: 'Nombrado' | 'Contratado' | 'Tiempo Completo' | 'Tiempo Parcial'
+  workSchedule?: 'Completo' | 'Mañana' | 'Tarde'
   hireDate?: string
   courses?: Array<{ course: string; role: string }>
   assignedCourses?: number

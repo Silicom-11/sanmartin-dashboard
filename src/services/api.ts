@@ -526,8 +526,8 @@ export const teachersService = {
     secondarySpecialties?: string[]
     educationLevel?: string
     university?: string
-    contractType?: 'nombrado' | 'contratado' | 'practicante'
-    workSchedule?: 'completo' | 'parcial'
+    contractType?: 'Nombrado' | 'Contratado' | 'Tiempo Completo' | 'Tiempo Parcial'
+    workSchedule?: 'Completo' | 'Mañana' | 'Tarde'
     hireDate?: string
   }) => {
     const response = await api.post('/teachers', data)
