@@ -426,6 +426,98 @@ export const notificationsService = {
   },
 }
 
+// ============ MESSAGES SERVICES ============
+
+export const messagesService = {
+  getConversations: async () => {
+    const response = await api.get('/messages/conversations')
+    return response.data
+  },
+
+  getMessages: async (conversationId: string, params?: { page?: number; limit?: number }) => {
+    const response = await api.get(`/messages/conversations/${conversationId}`, { params })
+    return response.data
+  },
+
+  send: async (data: { conversationId?: string; recipientId?: string; content: string }) => {
+    const response = await api.post('/messages/send', data)
+    return response.data
+  },
+
+  getContacts: async () => {
+    const response = await api.get('/messages/contacts')
+    return response.data
+  },
+
+  getUnreadCount: async () => {
+    const response = await api.get('/messages/unread-count')
+    return response.data
+  },
+
+  deleteMessage: async (id: string) => {
+    const response = await api.delete(`/messages/${id}`)
+    return response.data
+  },
+}
+
+// ============ EVENTS / CALENDAR SERVICES ============
+
+export const eventsService = {
+  getAll: async (params?: { startDate?: string; endDate?: string; type?: string }) => {
+    const response = await api.get('/events', { params })
+    return response.data
+  },
+
+  getById: async (id: string) => {
+    const response = await api.get(`/events/${id}`)
+    return response.data
+  },
+
+  getUpcoming: async (limit: number = 10) => {
+    const response = await api.get('/events/upcoming', { params: { limit } })
+    return response.data
+  },
+
+  create: async (data: {
+    title: string
+    date: string
+    time?: string
+    type: string
+    description?: string
+    location?: string
+    participants?: string
+    notifyStudents?: boolean
+    notifyParents?: boolean
+    notifyTeachers?: boolean
+  }) => {
+    const response = await api.post('/events', data)
+    return response.data
+  },
+
+  update: async (id: string, data: Partial<{
+    title: string
+    date: string
+    time: string
+    type: string
+    description: string
+    location: string
+    participants: string
+  }>) => {
+    const response = await api.put(`/events/${id}`, data)
+    return response.data
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/events/${id}`)
+    return response.data
+  },
+
+  sendReminder: async (id: string) => {
+    const response = await api.post(`/events/${id}/reminder`)
+    return response.data
+  },
+}
+
 // ============ DASHBOARD SERVICES ============
 
 export const dashboardService = {

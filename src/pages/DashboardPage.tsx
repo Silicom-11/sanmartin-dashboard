@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { dashboardService } from '@/services/api'
+import { dashboardService, notificationsService } from '@/services/api'
 import {
   Users,
   GraduationCap,
@@ -22,7 +22,7 @@ import {
   BarChart,
   Bar,
 } from 'recharts'
-import { formatDate } from '@/lib/utils'
+import { formatDate, timeAgo } from '@/lib/utils'
 
 // Datos de fallback para gráficos cuando no hay datos
 const fallbackAttendanceWeek = [
@@ -35,13 +35,6 @@ const fallbackAttendanceWeek = [
 
 const fallbackStudentsByGrade = [
   { name: 'Sin datos', count: 0 },
-]
-
-const mockRecentActivity = [
-  { id: 1, type: 'attendance', message: 'Asistencia registrada - 4°A Matemáticas', time: '10 min' },
-  { id: 2, type: 'grade', message: 'Notas publicadas - 3°B Historia', time: '25 min' },
-  { id: 3, type: 'justification', message: 'Nueva justificación - Juan Pérez', time: '1 hora' },
-  { id: 4, type: 'student', message: 'Nuevo estudiante registrado - María García', time: '2 horas' },
 ]
 
 interface StatCardProps {
@@ -84,13 +77,22 @@ export default function DashboardPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
     queryFn: dashboardService.getAdminStats,
-    refetchInterval: 30000, // Refrescar cada 30 segundos
+    refetchInterval: 30000,
+  })
+
+  // Obtener notificaciones recientes como actividad
+  const { data: notifData } = useQuery({
+    queryKey: ['recent-notifications'],
+    queryFn: () => notificationsService.getAll({ limit: 6 }),
+    refetchInterval: 30000,
   })
 
   // Extraer stats de la respuesta del API
   const apiStats = data?.data?.stats || {}
   const studentsByGrade = data?.data?.studentsByGrade || []
   const attendanceToday = data?.data?.attendanceToday || {}
+  const weeklyAttendance = data?.data?.weeklyAttendance || []
+  const recentNotifications = notifData?.data || []
   
   // Calcular porcentaje de asistencia de hoy
   const totalAttendance = (attendanceToday.present || 0) + (attendanceToday.absent || 0) + (attendanceToday.late || 0) + (attendanceToday.justified || 0)
@@ -105,6 +107,11 @@ export default function DashboardPage() {
         count: g.count
       }))
     : fallbackStudentsByGrade
+
+  // Formatear datos de asistencia semanal
+  const attendanceWeekData = weeklyAttendance.length > 0
+    ? weeklyAttendance.map((d: { day: string; rate: number }) => ({ day: d.day, value: d.rate }))
+    : fallbackAttendanceWeek
 
   if (isLoading) {
     return (
@@ -130,7 +137,6 @@ export default function DashboardPage() {
         <StatCard
           title="Total Estudiantes"
           value={apiStats.totalStudents ?? 0}
-          change={apiStats.totalStudents > 0 ? 3.2 : undefined}
           icon={GraduationCap}
           iconColor="text-blue-600"
           iconBg="bg-blue-100"
@@ -187,7 +193,7 @@ export default function DashboardPage() {
           </h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={fallbackAttendanceWeek}>
+              <LineChart data={attendanceWeekData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="day" stroke="#6b7280" fontSize={12} />
                 <YAxis stroke="#6b7280" fontSize={12} domain={[0, 100]} />
@@ -244,25 +250,34 @@ export default function DashboardPage() {
             Actividad Reciente
           </h3>
           <div className="space-y-4">
-            {mockRecentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-start gap-3">
-                <div className={`p-2 rounded-lg ${
-                  activity.type === 'attendance' ? 'bg-green-100' :
-                  activity.type === 'grade' ? 'bg-blue-100' :
-                  activity.type === 'justification' ? 'bg-orange-100' :
-                  'bg-purple-100'
-                }`}>
-                  {activity.type === 'attendance' && <Clock className="w-4 h-4 text-green-600" />}
-                  {activity.type === 'grade' && <BookOpen className="w-4 h-4 text-blue-600" />}
-                  {activity.type === 'justification' && <FileText className="w-4 h-4 text-orange-600" />}
-                  {activity.type === 'student' && <GraduationCap className="w-4 h-4 text-purple-600" />}
+            {recentNotifications.length > 0 ? recentNotifications.slice(0, 5).map((notif: { _id: string; title: string; message: string; type: string; createdAt: string }) => {
+              const typeMap: Record<string, { bg: string; icon: string }> = {
+                attendance: { bg: 'bg-green-100', icon: 'green' },
+                grade: { bg: 'bg-blue-100', icon: 'blue' },
+                justification: { bg: 'bg-orange-100', icon: 'orange' },
+                event: { bg: 'bg-purple-100', icon: 'purple' },
+                info: { bg: 'bg-blue-100', icon: 'blue' },
+                warning: { bg: 'bg-yellow-100', icon: 'yellow' },
+              }
+              const style = typeMap[notif.type] || { bg: 'bg-gray-100', icon: 'gray' }
+              return (
+                <div key={notif._id} className="flex items-start gap-3">
+                  <div className={`p-2 rounded-lg ${style.bg}`}>
+                    <Clock className={`w-4 h-4 text-${style.icon}-600`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 font-medium">{notif.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">{notif.message}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{timeAgo(new Date(notif.createdAt))}</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900">{activity.message}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">Hace {activity.time}</p>
-                </div>
+              )
+            }) : (
+              <div className="text-center py-4 text-gray-400">
+                <Clock className="w-8 h-8 mx-auto mb-2" />
+                <p className="text-sm">Sin actividad reciente</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
 

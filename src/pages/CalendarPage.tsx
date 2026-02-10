@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, Users, Tag, X, GraduationCap, Flag, PartyPopper, Bell, Send, Loader2 } from 'lucide-react'
+import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, MapPin, Users, Tag, X, GraduationCap, Flag, PartyPopper, Bell, Send, Loader2, Trash2, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
 import api from '@/services/api'
+import { eventsService } from '@/services/api'
 
 interface CalendarEvent {
   _id?: string
@@ -36,18 +37,24 @@ const eventColors = {
 const eventLabels = { exam: 'Examen', meeting: 'Reunión', holiday: 'Feriado', activity: 'Actividad', deadline: 'Fecha Límite' }
 
 // Modal para crear/editar evento
-function CreateEventModal({ onClose, onSave, isLoading }: { onClose: () => void; onSave: (event: Omit<CalendarEvent, 'id'>) => void; isLoading: boolean }) {
+function EventFormModal({ onClose, onSave, isLoading, initialData }: {
+  onClose: () => void
+  onSave: (event: Omit<CalendarEvent, 'id'>) => void
+  isLoading: boolean
+  initialData?: CalendarEvent | null
+}) {
+  const isEdit = !!initialData
   const [formData, setFormData] = useState({
-    title: '',
-    date: new Date().toISOString().split('T')[0],
-    time: '',
-    type: 'activity' as CalendarEvent['type'],
-    description: '',
-    location: '',
-    participants: '',
-    notifyStudents: true,
-    notifyParents: true,
-    notifyTeachers: true,
+    title: initialData?.title || '',
+    date: initialData?.date || new Date().toISOString().split('T')[0],
+    time: initialData?.time || '',
+    type: (initialData?.type || 'activity') as CalendarEvent['type'],
+    description: initialData?.description || '',
+    location: initialData?.location || '',
+    participants: initialData?.participants || '',
+    notifyStudents: initialData?.notifyStudents ?? true,
+    notifyParents: initialData?.notifyParents ?? true,
+    notifyTeachers: initialData?.notifyTeachers ?? true,
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -59,7 +66,7 @@ function CreateEventModal({ onClose, onSave, isLoading }: { onClose: () => void;
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white">
-          <h2 className="text-xl font-semibold">Nuevo Evento</h2>
+          <h2 className="text-xl font-semibold">{isEdit ? 'Editar Evento' : 'Nuevo Evento'}</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" disabled={isLoading}><X className="w-5 h-5" /></button>
         </div>
         
@@ -155,7 +162,7 @@ function CreateEventModal({ onClose, onSave, isLoading }: { onClose: () => void;
           <div className="flex gap-3 pt-4">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1" disabled={isLoading}>Cancelar</Button>
             <Button type="submit" className="flex-1 bg-sanmartin-primary hover:bg-sanmartin-primary-dark" disabled={isLoading}>
-              {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Guardando...</> : <><Plus className="w-4 h-4 mr-2" />Crear Evento</>}
+              {isLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Guardando...</> : isEdit ? <><Pencil className="w-4 h-4 mr-2" />Guardar Cambios</> : <><Plus className="w-4 h-4 mr-2" />Crear Evento</>}
             </Button>
           </div>
         </form>
@@ -164,7 +171,7 @@ function CreateEventModal({ onClose, onSave, isLoading }: { onClose: () => void;
   )
 }
 
-function EventModal({ event, onClose, onSendReminder, onEdit }: { event: CalendarEvent; onClose: () => void; onSendReminder: () => void; onEdit: () => void }) {
+function EventModal({ event, onClose, onSendReminder, onEdit, onDelete, isDeleting }: { event: CalendarEvent; onClose: () => void; onSendReminder: () => void; onEdit: () => void; onDelete: () => void; isDeleting?: boolean }) {
   const config = eventColors[event.type]
   const Icon = config.icon
 
@@ -218,7 +225,12 @@ function EventModal({ event, onClose, onSendReminder, onEdit }: { event: Calenda
           )}
           
           <div className="flex gap-2 pt-4">
-            <Button variant="outline" className="flex-1" onClick={onEdit}>Editar</Button>
+            <Button variant="destructive" size="icon" onClick={onDelete} disabled={isDeleting} title="Eliminar evento">
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </Button>
+            <Button variant="outline" className="flex-1" onClick={onEdit}>
+              <Pencil className="w-4 h-4 mr-2" />Editar
+            </Button>
             <Button onClick={onSendReminder} className="flex-1 bg-sanmartin-primary hover:bg-sanmartin-primary-dark">
               <Send className="w-4 h-4 mr-2" />Enviar Recordatorio
             </Button>
@@ -233,6 +245,7 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [viewMode, setViewMode] = useState<'month' | 'list'>('month')
   
   const { toast } = useToast()
@@ -282,6 +295,38 @@ export default function CalendarPage() {
     },
   })
 
+  // Mutation para editar evento
+  const updateEventMutation = useMutation({
+    mutationFn: async (eventData: Omit<CalendarEvent, 'id'> & { _id?: string }) => {
+      const eventId = eventData._id || editingEvent?._id || editingEvent?.id
+      if (!eventId) throw new Error('No event ID')
+      return eventsService.update(eventId, eventData)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] })
+      setEditingEvent(null)
+      toast({ title: '✅ Evento actualizado' })
+    },
+    onError: () => {
+      toast({ title: 'Error al actualizar evento', variant: 'destructive' })
+    },
+  })
+
+  // Mutation para eliminar evento
+  const deleteEventMutation = useMutation({
+    mutationFn: async (eventId: string) => {
+      return eventsService.delete(eventId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] })
+      setSelectedEvent(null)
+      toast({ title: '✅ Evento eliminado' })
+    },
+    onError: () => {
+      toast({ title: 'Error al eliminar evento', variant: 'destructive' })
+    },
+  })
+
   // Mutation para enviar recordatorio
   const sendReminderMutation = useMutation({
     mutationFn: async (event: CalendarEvent) => {
@@ -313,10 +358,19 @@ export default function CalendarPage() {
   }
 
   const handleEditEvent = () => {
-    toast({
-      title: 'Función de edición',
-      description: 'Próximamente podrás editar eventos existentes',
-    })
+    if (selectedEvent) {
+      setEditingEvent(selectedEvent)
+      setSelectedEvent(null)
+    }
+  }
+
+  const handleDeleteEvent = () => {
+    if (selectedEvent) {
+      const eventId = selectedEvent._id || selectedEvent.id
+      if (eventId && confirm('¿Seguro que deseas eliminar este evento?')) {
+        deleteEventMutation.mutate(eventId)
+      }
+    }
   }
 
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate()
@@ -442,13 +496,22 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {selectedEvent && <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} onSendReminder={handleSendReminder} onEdit={handleEditEvent} />}
+      {selectedEvent && <EventModal event={selectedEvent} onClose={() => setSelectedEvent(null)} onSendReminder={handleSendReminder} onEdit={handleEditEvent} onDelete={handleDeleteEvent} isDeleting={deleteEventMutation.isPending} />}
       
       {showCreateModal && (
-        <CreateEventModal 
+        <EventFormModal 
           onClose={() => setShowCreateModal(false)} 
           onSave={(data) => createEventMutation.mutate(data)}
           isLoading={createEventMutation.isPending}
+        />
+      )}
+
+      {editingEvent && (
+        <EventFormModal 
+          onClose={() => setEditingEvent(null)} 
+          onSave={(data) => updateEventMutation.mutate({ ...data, _id: editingEvent._id })}
+          isLoading={updateEventMutation.isPending}
+          initialData={editingEvent}
         />
       )}
     </div>

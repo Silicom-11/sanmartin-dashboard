@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Save, Building2, Calendar, Clock, Users, Bell, Shield, Palette, CheckCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import api from '@/services/api'
+import { dashboardService } from '@/services/api'
 
 interface InstitutionSettings {
   name: string
@@ -26,22 +27,22 @@ interface AcademicSettings {
   endDate: string
 }
 
-const mockInstitution: InstitutionSettings = {
+const defaultInstitution: InstitutionSettings = {
   name: 'Colegio San Martín',
-  code: 'CSM-001',
-  address: 'Av. Educación 123, Lima',
-  phone: '+51 999 888 777',
-  email: 'contacto@sanmartin.edu.pe',
+  code: '',
+  address: '',
+  phone: '',
+  email: '',
   logo: '/logo.png'
 }
 
-const mockAcademic: AcademicSettings = {
-  currentYear: '2024',
+const defaultAcademic: AcademicSettings = {
+  currentYear: new Date().getFullYear().toString(),
   evaluationSystem: 'bimestral',
   gradeScale: 'vigesimal',
   passingGrade: 11,
-  startDate: '2024-03-01',
-  endDate: '2024-12-20'
+  startDate: `${new Date().getFullYear()}-03-01`,
+  endDate: `${new Date().getFullYear()}-12-20`
 }
 
 function SettingSection({ title, description, icon: Icon, children }: { title: string; description: string; icon: React.ElementType; children: React.ReactNode }) {
@@ -64,9 +65,56 @@ function SettingSection({ title, description, icon: Icon, children }: { title: s
 }
 
 export default function SettingsPage() {
-  const [institution, setInstitution] = useState(mockInstitution)
-  const [academic, setAcademic] = useState(mockAcademic)
+  const [institution, setInstitution] = useState(defaultInstitution)
+  const [academic, setAcademic] = useState(defaultAcademic)
+  const [notifications, setNotifications] = useState({
+    attendance: true,
+    grades: true,
+    events: false,
+    emergency: true,
+  })
   const { toast } = useToast()
+
+  // Cargar datos desde API
+  const { data: institutionData } = useQuery({
+    queryKey: ['institution'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/institution')
+        return response.data
+      } catch { return null }
+    },
+  })
+
+  const { data: academicData } = useQuery({
+    queryKey: ['academic-settings'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/academic-settings')
+        return response.data
+      } catch { return null }
+    },
+  })
+
+  // Cargar stats para la sección de roles
+  const { data: dashboardData } = useQuery({
+    queryKey: ['dashboard-stats-settings'],
+    queryFn: dashboardService.getAdminStats,
+  })
+  const stats = dashboardData?.data?.stats || {}
+
+  // Aplicar datos de la API cuando lleguen
+  useEffect(() => {
+    if (institutionData?.data) {
+      setInstitution(prev => ({ ...prev, ...institutionData.data }))
+    }
+  }, [institutionData])
+
+  useEffect(() => {
+    if (academicData?.data) {
+      setAcademic(prev => ({ ...prev, ...academicData.data }))
+    }
+  }, [academicData])
 
   // Mutation para guardar configuración
   const saveSettingsMutation = useMutation({
@@ -216,18 +264,22 @@ export default function SettingsPage() {
         <SettingSection title="Notificaciones" description="Configuración de alertas y comunicaciones" icon={Bell}>
           <div className="space-y-3">
             {[
-              { id: 'attendance', label: 'Notificar ausencias a padres', desc: 'Envío automático por WhatsApp/Email', enabled: true },
-              { id: 'grades', label: 'Notificar calificaciones publicadas', desc: 'Cuando el docente registra notas', enabled: true },
-              { id: 'events', label: 'Recordatorios de eventos', desc: 'Reuniones, exámenes, actividades', enabled: false },
-              { id: 'emergency', label: 'Alertas de emergencia', desc: 'Notificaciones prioritarias', enabled: true },
+              { id: 'attendance', label: 'Notificar ausencias a padres', desc: 'Envío automático por WhatsApp/Email' },
+              { id: 'grades', label: 'Notificar calificaciones publicadas', desc: 'Cuando el docente registra notas' },
+              { id: 'events', label: 'Recordatorios de eventos', desc: 'Reuniones, exámenes, actividades' },
+              { id: 'emergency', label: 'Alertas de emergencia', desc: 'Notificaciones prioritarias' },
             ].map((notif) => (
               <div key={notif.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
                   <p className="font-medium text-sm">{notif.label}</p>
                   <p className="text-xs text-gray-500">{notif.desc}</p>
                 </div>
-                <Button variant={notif.enabled ? 'default' : 'outline'} size="sm">
-                  {notif.enabled ? 'Activo' : 'Inactivo'}
+                <Button
+                  variant={notifications[notif.id as keyof typeof notifications] ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setNotifications(prev => ({ ...prev, [notif.id]: !prev[notif.id as keyof typeof prev] }))}
+                >
+                  {notifications[notif.id as keyof typeof notifications] ? 'Activo' : 'Inactivo'}
                 </Button>
               </div>
             ))}
@@ -237,10 +289,10 @@ export default function SettingsPage() {
         <SettingSection title="Roles y Permisos" description="Gestión de acceso al sistema" icon={Shield}>
           <div className="space-y-3">
             {[
-              { role: 'Administrador', count: 2, color: 'bg-red-100 text-red-700', perms: 'Acceso total' },
-              { role: 'Director', count: 1, color: 'bg-purple-100 text-purple-700', perms: 'Gestión académica' },
-              { role: 'Docente', count: 24, color: 'bg-blue-100 text-blue-700', perms: 'Notas y asistencia' },
-              { role: 'Padre/Tutor', count: 156, color: 'bg-green-100 text-green-700', perms: 'Solo lectura' },
+              { role: 'Administrador', count: 1, color: 'bg-red-100 text-red-700', perms: 'Acceso total' },
+              { role: 'Docente', count: stats.totalTeachers ?? 0, color: 'bg-blue-100 text-blue-700', perms: 'Notas y asistencia' },
+              { role: 'Padre/Tutor', count: stats.totalParents ?? 0, color: 'bg-green-100 text-green-700', perms: 'Solo lectura' },
+              { role: 'Estudiante', count: stats.totalStudents ?? 0, color: 'bg-purple-100 text-purple-700', perms: 'Solo lectura' },
             ].map((r) => (
               <div key={r.role} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center gap-3">
