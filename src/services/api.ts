@@ -246,8 +246,8 @@ export const coursesService = {
     return response.data
   },
   
-  addStudent: async (courseId: string, studentId: string) => {
-    const response = await api.post(`/courses/${courseId}/students`, { studentId })
+  addStudent: async (courseId: string, studentIds: string[]) => {
+    const response = await api.post(`/courses/${courseId}/students`, { studentIds })
     return response.data
   },
   
