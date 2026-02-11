@@ -1149,7 +1149,7 @@ export default function CoursesPage() {
         description: data.description,
         gradeLevel: data.gradeLevel,
         section: data.section,
-        teacherId: data.teacherId || undefined,
+        teacherId: data.teacherId || '',
         schedule: data.schedule,
       }),
     onSuccess: () => {
