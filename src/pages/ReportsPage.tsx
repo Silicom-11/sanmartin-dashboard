@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FileSpreadsheet, Download, TrendingUp, TrendingDown, Users, BookOpen, Calendar, BarChart3, PieChart, Award, Clock, Filter, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -45,7 +45,7 @@ export default function ReportsPage() {
   const [selectedYear] = useState('2024')
 
   // Cargar estadisticas de calificaciones (incluye distribucion y byBimester)
-  const { data: statsData, isLoading: statsLoading } = useQuery({
+  const { data: statsData } = useQuery({
     queryKey: ['report-grade-stats'],
     queryFn: async () => {
       const res = await api.get('/grades/stats')

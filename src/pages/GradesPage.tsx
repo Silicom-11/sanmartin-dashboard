@@ -1,7 +1,7 @@
 ﻿import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Search, FileSpreadsheet, TrendingUp, TrendingDown, Award, Users, BookOpen,
+  Search, FileSpreadsheet, TrendingUp, Award, Users, BookOpen,
   Download, Eye, BarChart3, X, AlertCircle, Lock, Unlock, Plus, ChevronLeft,
   Loader2, CheckCircle2
 } from 'lucide-react'
