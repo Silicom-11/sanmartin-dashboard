@@ -211,7 +211,8 @@ export const coursesService = {
     description?: string
     gradeLevel: string
     section?: string
-    teacherId: string
+    teacherId?: string
+    studentIds?: string[]
     schedule?: Array<{
       day: string
       startTime: string
@@ -257,62 +258,130 @@ export const coursesService = {
   },
 }
 
-// ============ GRADES SERVICES ============
+// ============ GRADES SERVICES (Bimester System) ============
 
 export const gradesService = {
   getAll: async (params?: {
     courseId?: string
     studentId?: string
-    period?: string
+    bimester?: number
     year?: number
   }) => {
     const response = await api.get('/grades', { params })
     return response.data
   },
-  
-  getByCourse: async (courseId: string, params?: { period?: string; year?: number }) => {
+
+  getStats: async (params?: { year?: number; bimester?: number }) => {
+    const response = await api.get('/grades/stats', { params })
+    return response.data
+  },
+
+  getByCourse: async (courseId: string, params?: { bimester?: number; year?: number }) => {
     const response = await api.get(`/grades/course/${courseId}`, { params })
     return response.data
   },
-  
-  save: async (data: {
+
+  getByCourseSummary: async () => {
+    const response = await api.get('/grades/by-course')
+    return response.data
+  },
+
+  getReport: async (courseId: string, params?: { year?: number }) => {
+    const response = await api.get(`/grades/report/${courseId}`, { params })
+    return response.data
+  },
+
+  getHistory: async (studentId: string, params?: { year?: number }) => {
+    const response = await api.get(`/grades/history/${studentId}`, { params })
+    return response.data
+  },
+
+  saveScore: async (data: {
     studentId: string
     courseId: string
-    period: string
+    evaluationId: string
+    bimester: number
+    score: number
+    comments?: string
     academicYear?: number
-    evaluations?: Array<{
-      type: 'examen' | 'tarea' | 'participacion' | 'proyecto' | 'practica'
-      name: string
-      grade: number
-      weight?: number
-      date?: string
-      observations?: string
-    }>
   }) => {
-    const response = await api.post('/grades', data)
+    const response = await api.post('/grades/save-score', data)
     return response.data
   },
-  
+
   saveBulk: async (data: {
     courseId: string
-    period: string
+    evaluationId: string
+    bimester: number
     academicYear?: number
-    students: Array<{
+    scores: Array<{
       studentId: string
-      evaluations: Array<{
-        type: string
-        name: string
-        grade: number
-        weight?: number
-      }>
+      score: number
+      comments?: string
     }>
   }) => {
-    const response = await api.post('/grades/bulk', data)
+    const response = await api.post('/grades/save-bulk', data)
     return response.data
   },
-  
-  publish: async (gradeId: string) => {
-    const response = await api.put(`/grades/${gradeId}/publish`)
+
+  closeBimester: async (data: { courseId: string; bimester: number; academicYear?: number }) => {
+    const response = await api.put('/grades/close-bimester', data)
+    return response.data
+  },
+
+  reopenBimester: async (data: { courseId: string; bimester: number; academicYear?: number }) => {
+    const response = await api.put('/grades/reopen-bimester', data)
+    return response.data
+  },
+
+  publishBimester: async (data: { courseId: string; bimester: number; academicYear?: number }) => {
+    const response = await api.put('/grades/publish-bimester', data)
+    return response.data
+  },
+}
+
+// ============ EVALUATIONS SERVICES ============
+
+export const evaluationsService = {
+  getByCourse: async (courseId: string, params?: { bimester?: number; year?: number }) => {
+    const response = await api.get(`/evaluations/course/${courseId}`, { params })
+    return response.data
+  },
+
+  create: async (data: {
+    courseId: string
+    name: string
+    type: 'examen' | 'tarea' | 'practica' | 'proyecto' | 'participacion' | 'exposicion' | 'otro'
+    bimester: number
+    maxGrade?: number
+    weight?: number
+    date?: string
+    description?: string
+    academicYear?: number
+  }) => {
+    const response = await api.post('/evaluations', data)
+    return response.data
+  },
+
+  update: async (id: string, data: Partial<{
+    name: string
+    type: string
+    maxGrade: number
+    weight: number
+    date: string
+    description: string
+  }>) => {
+    const response = await api.put(`/evaluations/${id}`, data)
+    return response.data
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/evaluations/${id}`)
+    return response.data
+  },
+
+  reorder: async (evaluationIds: string[]) => {
+    const response = await api.put('/evaluations/reorder', { evaluationIds })
     return response.data
   },
 }

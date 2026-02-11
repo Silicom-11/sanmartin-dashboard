@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FileSpreadsheet, Download, TrendingUp, TrendingDown, Users, BookOpen, Calendar, BarChart3, PieChart, Award, Clock, Filter, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -44,7 +44,16 @@ export default function ReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState('B1')
   const [selectedYear] = useState('2024')
 
-  // Cargar métricas reales
+  // Cargar estadisticas de calificaciones (incluye distribucion y byBimester)
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['report-grade-stats'],
+    queryFn: async () => {
+      const res = await api.get('/grades/stats')
+      return res.data.data
+    },
+  })
+
+  // Cargar metricas reales
   const { data: metricsData, isLoading: metricsLoading, error } = useQuery({
     queryKey: ['report-metrics'],
     queryFn: async () => {
@@ -156,19 +165,20 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {['Bimestre 1', 'Bimestre 2', 'Bimestre 3', 'Bimestre 4'].map((period, i) => {
-                const value = [14.7, 14.9, 0, 0][i]
-                const isComplete = i < 2
+              {[1, 2, 3, 4].map((bim) => {
+                const bimData = (statsData as any)?.byBimester?.[bim]
+                const value = bimData?.avg || 0
+                const hasData = value > 0
                 return (
-                  <div key={period} className="space-y-2">
+                  <div key={bim} className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{period}</span>
-                      <span className={`text-sm ${isComplete ? 'font-bold' : 'text-gray-400'}`}>
-                        {isComplete ? value : 'Pendiente'}
+                      <span className="text-sm font-medium">Bimestre {bim}</span>
+                      <span className={`text-sm ${hasData ? 'font-bold' : 'text-gray-400'}`}>
+                        {hasData ? value.toFixed(1) : 'Sin datos'}
                       </span>
                     </div>
                     <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${isComplete ? 'bg-gradient-to-r from-sanmartin-primary to-blue-400' : 'bg-gray-200'}`} style={{ width: isComplete ? `${(value / 20) * 100}%` : '0%' }} />
+                      <div className={`h-full rounded-full ${hasData ? 'bg-gradient-to-r from-sanmartin-primary to-blue-400' : 'bg-gray-200'}`} style={{ width: hasData ? `${(value / 20) * 100}%` : '0%' }} />
                     </div>
                   </div>
                 )
@@ -223,12 +233,16 @@ export default function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {[
-                { label: 'AD (17-20)', count: 124, percent: 15, color: 'bg-green-500' },
-                { label: 'A (14-16)', count: 342, percent: 40, color: 'bg-blue-500' },
-                { label: 'B (11-13)', count: 287, percent: 34, color: 'bg-yellow-500' },
-                { label: 'C (0-10)', count: 94, percent: 11, color: 'bg-red-500' },
-              ].map((item) => (
+              {(() => {
+                const dist = (statsData as any)?.distribution || { AD: 0, A: 0, B: 0, C: 0 }
+                const total = dist.AD + dist.A + dist.B + dist.C || 1
+                return [
+                  { label: 'AD (17-20)', count: dist.AD, percent: Math.round(dist.AD / total * 100), color: 'bg-green-500' },
+                  { label: 'A (14-16)', count: dist.A, percent: Math.round(dist.A / total * 100), color: 'bg-blue-500' },
+                  { label: 'B (11-13)', count: dist.B, percent: Math.round(dist.B / total * 100), color: 'bg-yellow-500' },
+                  { label: 'C (0-10)', count: dist.C, percent: Math.round(dist.C / total * 100), color: 'bg-red-500' },
+                ]
+              })().map((item) => (
                 <div key={item.label} className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{item.label}</span>

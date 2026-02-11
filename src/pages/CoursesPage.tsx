@@ -69,6 +69,7 @@ interface CourseFormData {
   period: string
   schedule: ScheduleItem[]
   evaluationWeights: { exams: number; tasks: number; participation: number; projects: number }
+  studentIds: string[]
 }
 
 // ============ CONSTANTS ============
@@ -80,7 +81,7 @@ const GRADE_LEVELS = [
 
 const SECTIONS = ['A', 'B', 'C', 'D', 'E', 'F']
 const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-const PERIODS = ['Anual', 'Primer Trimestre', 'Segundo Trimestre', 'Tercer Trimestre']
+const PERIODS = ['Anual', 'Bimestre 1', 'Bimestre 2', 'Bimestre 3', 'Bimestre 4']
 
 const SUBJECT_PRESETS: Record<string, { code: string; color: string }> = {
   'Matemáticas': { code: 'MAT', color: '#3B82F6' },
@@ -119,6 +120,7 @@ const EMPTY_FORM: CourseFormData = {
   period: 'Anual',
   schedule: [],
   evaluationWeights: { ...DEFAULT_WEIGHTS },
+  studentIds: [],
 }
 
 // ============ STAT CARD ============
@@ -293,12 +295,16 @@ function CourseFormModal({ course, onClose, onSave, isLoading }: {
         period: course.period || 'Anual',
         schedule: course.schedule || [],
         evaluationWeights: course.evaluationWeights || { ...DEFAULT_WEIGHTS },
+        studentIds: Array.isArray(course.students) 
+          ? course.students.map((s: StudentItem | string) => typeof s === 'string' ? s : s._id) 
+          : [],
       }
     }
     return { ...EMPTY_FORM }
   })
 
-  const [activeTab, setActiveTab] = useState<'general' | 'schedule' | 'evaluation'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'students' | 'schedule' | 'evaluation'>('general')
+  const [studentSearchTerm, setStudentSearchTerm] = useState('')
 
   // Load available teachers
   const { data: teachersData } = useQuery({
@@ -313,6 +319,28 @@ function CourseFormModal({ course, onClose, onSave, isLoading }: {
     if (Array.isArray(teachersData)) return teachersData
     return []
   }, [teachersData])
+
+  // Load available students
+  const { data: allStudentsData } = useQuery({
+    queryKey: ['students-for-courses'],
+    queryFn: async () => {
+      const res = await studentsManagementService.getAll({ limit: 500 })
+      return res.data?.students || res.data || []
+    },
+  })
+
+  const allStudents: StudentItem[] = useMemo(() => {
+    if (Array.isArray(allStudentsData)) return allStudentsData
+    return []
+  }, [allStudentsData])
+
+  const filteredStudents = useMemo(() => {
+    return allStudents.filter(s => {
+      const match = `${s.firstName} ${s.lastName} ${s.dni || ''} ${s.enrollmentNumber || ''}`.toLowerCase()
+        .includes(studentSearchTerm.toLowerCase())
+      return match
+    })
+  }, [allStudents, studentSearchTerm])
 
   // Auto-generate code
   useEffect(() => {
@@ -346,6 +374,7 @@ function CourseFormModal({ course, onClose, onSave, isLoading }: {
 
   const tabs = [
     { id: 'general' as const, label: 'General', icon: BookOpen },
+    { id: 'students' as const, label: `Alumnos (${formData.studentIds.length})`, icon: Users },
     { id: 'schedule' as const, label: 'Horario', icon: Calendar },
     { id: 'evaluation' as const, label: 'Evaluación', icon: BarChart3 },
   ]
@@ -495,6 +524,67 @@ function CourseFormModal({ course, onClose, onSave, isLoading }: {
                     placeholder="Descripción opcional del curso"
                     disabled={isLoading}
                   />
+                </div>
+              </div>
+            )}
+
+            {/* TAB: Alumnos */}
+            {activeTab === 'students' && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-gray-700 mb-2">
+                  <Users className="w-5 h-5" />
+                  <h3 className="font-medium">Asignar Estudiantes</h3>
+                </div>
+                <p className="text-sm text-gray-500">
+                  Selecciona los estudiantes que formarán parte de este curso.
+                </p>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    placeholder="Buscar estudiante por nombre, DNI..."
+                    value={studentSearchTerm}
+                    onChange={(e) => setStudentSearchTerm(e.target.value)}
+                    className="pl-10"
+                    disabled={isLoading}
+                  />
+                </div>
+                {formData.studentIds.length > 0 && (
+                  <div className="p-2 bg-blue-50 rounded-lg">
+                    <p className="text-sm font-medium text-blue-700">{formData.studentIds.length} estudiante(s) seleccionado(s)</p>
+                  </div>
+                )}
+                <div className="max-h-52 overflow-y-auto border rounded-lg divide-y">
+                  {filteredStudents.map((student) => {
+                    const isSelected = formData.studentIds.includes(student._id)
+                    return (
+                      <label
+                        key={student._id}
+                        className={`flex items-center gap-3 p-2.5 cursor-pointer hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            const ids = isSelected
+                              ? formData.studentIds.filter(id => id !== student._id)
+                              : [...formData.studentIds, student._id]
+                            setFormData({ ...formData, studentIds: ids })
+                          }}
+                          className="w-4 h-4 text-blue-600 rounded border-gray-300"
+                          disabled={isLoading}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{student.firstName} {student.lastName}</p>
+                          <p className="text-xs text-gray-400">{student.gradeLevel || ''} {student.section || ''} • {student.enrollmentNumber || student.dni || ''}</p>
+                        </div>
+                      </label>
+                    )
+                  })}
+                  {filteredStudents.length === 0 && (
+                    <div className="p-4 text-center text-sm text-gray-400">
+                      No se encontraron estudiantes
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1035,7 +1125,8 @@ export default function CoursesPage() {
         description: data.description || undefined,
         gradeLevel: data.gradeLevel,
         section: data.section,
-        teacherId: data.teacherId || undefined as unknown as string,
+        teacherId: data.teacherId || undefined,
+        studentIds: data.studentIds.length > 0 ? data.studentIds : undefined,
         schedule: data.schedule.length > 0 ? data.schedule : undefined,
       }),
     onSuccess: () => {
