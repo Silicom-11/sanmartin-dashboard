@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, FileText, Clock, CheckCircle, XCircle, Eye, Download, Image, X, AlertCircle, Loader2 } from 'lucide-react'
+import { Search, FileText, Clock, CheckCircle, XCircle, Eye, Download, Image, X, AlertCircle, Loader2, Paperclip, Calendar, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -9,19 +9,31 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/use-toast'
 import api from '@/services/api'
 
+interface JustificationDocument {
+  name: string
+  url?: string
+  key?: string
+  mimetype?: string
+  size?: number
+  storage?: 'local' | 'r2'
+}
+
 interface Justification {
   _id: string
-  student: { firstName: string; lastName: string; enrollmentNumber: string; gradeLevel: string }
-  parent: { firstName: string; lastName: string; phone: string }
-  date: string
+  student: { _id: string; firstName: string; lastName: string; enrollmentNumber?: string; gradeLevel?: string }
+  parent?: { _id: string; firstName: string; lastName: string; phone?: string; email?: string }
+  submittedBy?: { _id: string; firstName: string; lastName: string }
+  dates: string[]
   reason: string
-  description: string
-  attachmentUrl?: string
-  attachmentType?: 'image' | 'pdf'
+  observations?: string
+  documents: JustificationDocument[]
   status: 'pending' | 'approved' | 'rejected'
-  reviewedBy?: string
+  reviewedBy?: { firstName: string; lastName: string }
+  reviewComments?: string
   reviewedAt?: string
-  reviewNote?: string
+  coursesAffected?: string[]
+  createdAt: string
+  updatedAt: string
 }
 
 const statusConfig = {
@@ -46,10 +58,31 @@ function StatCard({ title, value, icon: Icon, color }: { title: string; value: n
   )
 }
 
-function JustificationDetailModal({ justification, onClose, onApprove, onReject, isLoading }: { justification: Justification; onClose: () => void; onApprove: (note: string) => void; onReject: (note: string) => void; isLoading?: boolean }) {
-  const [reviewNote, setReviewNote] = useState('')
+function JustificationDetailModal({ justification, onClose, onApprove, onReject, isLoading }: {
+  justification: Justification
+  onClose: () => void
+  onApprove: (comments: string) => void
+  onReject: (comments: string) => void
+  isLoading?: boolean
+}) {
+  const [reviewComments, setReviewComments] = useState('')
   const config = statusConfig[justification.status]
   const StatusIcon = config.icon
+
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('es-PE', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  const isImageDoc = (doc: JustificationDocument) => {
+    return doc.mimetype?.startsWith('image') || doc.name?.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+  }
+
+  const getDocUrl = (doc: JustificationDocument) => {
+    if (doc.url) return doc.url
+    // Fallback to API base + uploads path
+    const baseUrl = (api.defaults.baseURL || '').replace('/api', '')
+    return `${baseUrl}/uploads/justifications/${doc.name}`
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -64,79 +97,151 @@ function JustificationDetailModal({ justification, onClose, onApprove, onReject,
               <Badge className={`${config.bg} ${config.text}`}>{config.label}</Badge>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" disabled={isLoading}><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg" disabled={isLoading}>
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Student & Parent info */}
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-gray-50 rounded-xl">
               <h4 className="text-sm font-medium text-gray-500 mb-2">Estudiante</h4>
               <p className="font-semibold">{justification.student.firstName} {justification.student.lastName}</p>
-              <p className="text-sm text-gray-500">{justification.student.gradeLevel}</p>
-              <p className="text-xs text-gray-400">{justification.student.enrollmentNumber}</p>
+              {justification.student.gradeLevel && <p className="text-sm text-gray-500">{justification.student.gradeLevel}</p>}
+              {justification.student.enrollmentNumber && <p className="text-xs text-gray-400">{justification.student.enrollmentNumber}</p>}
             </div>
             <div className="p-4 bg-gray-50 rounded-xl">
-              <h4 className="text-sm font-medium text-gray-500 mb-2">Padre/Tutor</h4>
-              <p className="font-semibold">{justification.parent.firstName} {justification.parent.lastName}</p>
-              <p className="text-sm text-gray-500">{justification.parent.phone}</p>
+              <h4 className="text-sm font-medium text-gray-500 mb-2">Solicitante</h4>
+              {justification.parent ? (
+                <>
+                  <p className="font-semibold">{justification.parent.firstName} {justification.parent.lastName}</p>
+                  {justification.parent.phone && <p className="text-sm text-gray-500">{justification.parent.phone}</p>}
+                </>
+              ) : justification.submittedBy ? (
+                <p className="font-semibold">{justification.submittedBy.firstName} {justification.submittedBy.lastName}</p>
+              ) : (
+                <p className="text-gray-400">No disponible</p>
+              )}
             </div>
           </div>
 
+          {/* Dates */}
           <div>
-            <h4 className="text-sm font-medium text-gray-500 mb-2">Fecha de Inasistencia</h4>
-            <p className="font-medium">{new Date(justification.date).toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <h4 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+              <Calendar className="w-4 h-4" /> Fechas de Inasistencia
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {(justification.dates || []).map((date, i) => (
+                <Badge key={i} variant="outline" className="text-sm">{formatDate(date)}</Badge>
+              ))}
+              {(!justification.dates || justification.dates.length === 0) && (
+                <p className="text-gray-400 text-sm">Sin fechas registradas</p>
+              )}
+            </div>
           </div>
 
+          {/* Reason */}
           <div>
             <h4 className="text-sm font-medium text-gray-500 mb-2">Motivo</h4>
-            <Badge variant="outline">{justification.reason}</Badge>
+            <Badge variant="outline" className="text-sm">{justification.reason}</Badge>
           </div>
 
-          <div>
-            <h4 className="text-sm font-medium text-gray-500 mb-2">Descripción</h4>
-            <p className="text-gray-700 bg-gray-50 p-4 rounded-xl">{justification.description}</p>
-          </div>
-
-          {justification.attachmentUrl && (
+          {/* Observations */}
+          {justification.observations && (
             <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-2">Archivo Adjunto</h4>
-              <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
-                {justification.attachmentType === 'image' ? (
-                  <Image className="w-8 h-8 text-blue-500" />
-                ) : (
-                  <FileText className="w-8 h-8 text-red-500" />
-                )}
-                <div className="flex-1">
-                  <p className="font-medium">{justification.attachmentType === 'image' ? 'Imagen adjunta' : 'Documento PDF'}</p>
-                  <p className="text-sm text-gray-500">Clic para ver</p>
-                </div>
-                <Button variant="outline" size="sm"><Download className="w-4 h-4 mr-1" />Descargar</Button>
+              <h4 className="text-sm font-medium text-gray-500 mb-2">Observaciones</h4>
+              <p className="text-gray-700 bg-gray-50 p-4 rounded-xl">{justification.observations}</p>
+            </div>
+          )}
+
+          {/* Documents */}
+          {justification.documents && justification.documents.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-gray-500 mb-2 flex items-center gap-2">
+                <Paperclip className="w-4 h-4" /> Documentos Adjuntos ({justification.documents.length})
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                {justification.documents.map((doc, i) => (
+                  <a
+                    key={i}
+                    href={getDocUrl(doc)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border"
+                  >
+                    {isImageDoc(doc) ? (
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Image className="w-6 h-6 text-blue-500" />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <FileText className="w-6 h-6 text-red-500" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{doc.name || `Documento ${i + 1}`}</p>
+                      <p className="text-xs text-gray-500">
+                        {doc.storage === 'r2' ? 'Nube' : 'Local'} • {doc.mimetype || 'archivo'}
+                      </p>
+                    </div>
+                    <Download className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  </a>
+                ))}
               </div>
             </div>
           )}
 
-          {justification.status !== 'pending' && justification.reviewNote && (
+          {/* Review info (if already reviewed) */}
+          {justification.status !== 'pending' && justification.reviewComments && (
             <div className={`p-4 rounded-xl ${justification.status === 'approved' ? 'bg-green-50' : 'bg-red-50'}`}>
               <h4 className="text-sm font-medium mb-1">Nota de Revisión</h4>
-              <p className="text-gray-700">{justification.reviewNote}</p>
-              <p className="text-xs text-gray-400 mt-2">Por {justification.reviewedBy} el {justification.reviewedAt}</p>
+              <p className="text-gray-700">{justification.reviewComments}</p>
+              {justification.reviewedBy && (
+                <p className="text-xs text-gray-400 mt-2">
+                  Por {justification.reviewedBy.firstName} {justification.reviewedBy.lastName}
+                  {justification.reviewedAt && ` el ${formatDate(justification.reviewedAt)}`}
+                </p>
+              )}
             </div>
           )}
 
+          {/* Review actions (if pending) */}
           {justification.status === 'pending' && (
             <div className="space-y-4 pt-4 border-t">
               <div>
                 <label className="text-sm font-medium text-gray-700">Nota de Revisión (opcional)</label>
-                <Input value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} placeholder="Añade una nota..." className="mt-1" disabled={isLoading} />
+                <Input
+                  value={reviewComments}
+                  onChange={(e) => setReviewComments(e.target.value)}
+                  placeholder="Añade una nota de revisión..."
+                  className="mt-1"
+                  disabled={isLoading}
+                />
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1 border-red-500 text-red-600 hover:bg-red-50" onClick={() => onReject(reviewNote)} disabled={isLoading}>
-                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XCircle className="w-4 h-4 mr-2" />}Rechazar
+                <Button
+                  variant="outline"
+                  className="flex-1 border-red-500 text-red-600 hover:bg-red-50"
+                  onClick={() => onReject(reviewComments)}
+                  disabled={isLoading}
+                >
+                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XCircle className="w-4 h-4 mr-2" />}
+                  Rechazar
                 </Button>
-                <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={() => onApprove(reviewNote)} disabled={isLoading}>
-                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}Aprobar
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  onClick={() => onApprove(reviewComments)}
+                  disabled={isLoading}
+                >
+                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+                  Aprobar
                 </Button>
               </div>
+              <p className="text-xs text-gray-400 text-center">
+                <Shield className="w-3 h-3 inline mr-1" />
+                Al aprobar, la asistencia del alumno se actualizará automáticamente a "Justificado"
+              </p>
             </div>
           )}
         </div>
@@ -149,20 +254,22 @@ export default function JustificationsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [selectedJustification, setSelectedJustification] = useState<Justification | null>(null)
-  
+
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
-  // Query para obtener justificaciones
+  // Fetch justifications
   const { data, isLoading } = useQuery({
-    queryKey: ['justifications', searchTerm, statusFilter],
+    queryKey: ['justifications', statusFilter],
     queryFn: async () => {
-      const response = await api.get('/justifications', { params: statusFilter !== 'all' ? { status: statusFilter } : {} })
+      const params: Record<string, string> = {}
+      if (statusFilter !== 'all') params.status = statusFilter
+      const response = await api.get('/justifications', { params })
       return response.data
     },
   })
 
-  // Query para estadísticas
+  // Fetch stats
   const { data: statsData } = useQuery({
     queryKey: ['justifications-stats'],
     queryFn: async () => {
@@ -173,16 +280,17 @@ export default function JustificationsPage() {
 
   const stats = statsData?.data || { total: 0, pending: 0, approved: 0, rejected: 0 }
 
-  // Mutation para aprobar
+  // Approve mutation
   const approveMutation = useMutation({
-    mutationFn: async ({ id, reviewNote }: { id: string; reviewNote: string }) => {
-      const response = await api.put(`/justifications/${id}/review`, { status: 'approved', reviewNote })
+    mutationFn: async ({ id, comments }: { id: string; comments: string }) => {
+      const response = await api.put(`/justifications/${id}/review`, { status: 'approved', comments })
       return response.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['justifications'] })
       queryClient.invalidateQueries({ queryKey: ['justifications-stats'] })
-      toast({ title: 'Justificación aprobada', description: 'La solicitud fue aprobada exitosamente' })
+      queryClient.invalidateQueries({ queryKey: ['attendance'] })
+      toast({ title: '✓ Justificación aprobada', description: 'La asistencia del alumno fue actualizada automáticamente a "Justificado"' })
       setSelectedJustification(null)
     },
     onError: (error: Error) => {
@@ -190,10 +298,10 @@ export default function JustificationsPage() {
     },
   })
 
-  // Mutation para rechazar
+  // Reject mutation
   const rejectMutation = useMutation({
-    mutationFn: async ({ id, reviewNote }: { id: string; reviewNote: string }) => {
-      const response = await api.put(`/justifications/${id}/review`, { status: 'rejected', reviewNote })
+    mutationFn: async ({ id, comments }: { id: string; comments: string }) => {
+      const response = await api.put(`/justifications/${id}/review`, { status: 'rejected', comments })
       return response.data
     },
     onSuccess: () => {
@@ -207,22 +315,15 @@ export default function JustificationsPage() {
     },
   })
 
-  const justifications = (data?.data || []).filter((j: Justification) => {
-    const matchesSearch = `${j.student.firstName} ${j.student.lastName} ${j.reason}`.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || j.status === statusFilter
-    return matchesSearch && matchesStatus
+  const justifications: Justification[] = (data?.data || []).filter((j: Justification) => {
+    const studentName = `${j.student?.firstName || ''} ${j.student?.lastName || ''}`.toLowerCase()
+    const matchesSearch = studentName.includes(searchTerm.toLowerCase()) ||
+      (j.reason || '').toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesSearch
   })
 
-  const handleApprove = (reviewNote: string) => {
-    if (selectedJustification) {
-      approveMutation.mutate({ id: selectedJustification._id, reviewNote })
-    }
-  }
-
-  const handleReject = (reviewNote: string) => {
-    if (selectedJustification) {
-      rejectMutation.mutate({ id: selectedJustification._id, reviewNote })
-    }
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })
   }
 
   return (
@@ -246,7 +347,9 @@ export default function JustificationsPage() {
         <Card className="border-yellow-200 bg-yellow-50">
           <CardContent className="p-4 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600" />
-            <span className="text-yellow-800">Tienes <strong>{stats.pending}</strong> justificaciones pendientes de revisión</span>
+            <span className="text-yellow-800">
+              Tienes <strong>{stats.pending}</strong> justificación{stats.pending !== 1 ? 'es' : ''} pendiente{stats.pending !== 1 ? 's' : ''} de revisión
+            </span>
           </CardContent>
         </Card>
       )}
@@ -275,41 +378,55 @@ export default function JustificationsPage() {
             <Card key={i}><CardContent className="p-6"><Skeleton className="h-24 w-full" /></CardContent></Card>
           ))}
         </div>
+      ) : justifications.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center">
+            <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Sin justificaciones</h3>
+            <p className="text-gray-500">No hay solicitudes que coincidan con los filtros.</p>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-4">
-          {justifications.map((justification: Justification) => {
+          {justifications.map((justification) => {
             const config = statusConfig[justification.status]
             const StatusIcon = config.icon
-            
+            const docCount = justification.documents?.length || 0
+
             return (
               <Card key={justification._id} className={`hover:shadow-lg transition-shadow ${justification.status === 'pending' ? 'border-yellow-200' : ''}`}>
                 <CardContent className="p-6">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 bg-sanmartin-primary rounded-full flex items-center justify-center text-white font-bold">
-                        {justification.student.firstName[0]}{justification.student.lastName[0]}
+                      <div className="w-12 h-12 bg-sanmartin-primary rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                        {justification.student?.firstName?.[0]}{justification.student?.lastName?.[0]}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{justification.student.firstName} {justification.student.lastName}</h3>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-semibold">{justification.student?.firstName} {justification.student?.lastName}</h3>
                           <Badge className={`${config.bg} ${config.text}`}>
                             <StatusIcon className="w-3 h-3 mr-1" />{config.label}
                           </Badge>
                         </div>
-                        <p className="text-sm text-gray-500">{justification.student.gradeLevel}</p>
-                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
-                          <span className="flex items-center gap-1"><Clock className="w-4 h-4" />{new Date(justification.date).toLocaleDateString('es-PE')}</span>
+                        {justification.student?.gradeLevel && (
+                          <p className="text-sm text-gray-500">{justification.student.gradeLevel}</p>
+                        )}
+                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-600 flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            {(justification.dates || []).map(d => formatDate(d)).join(', ') || 'Sin fecha'}
+                          </span>
                           <Badge variant="outline">{justification.reason}</Badge>
-                          {justification.attachmentUrl && (
+                          {docCount > 0 && (
                             <span className="flex items-center gap-1 text-blue-600">
-                              {justification.attachmentType === 'image' ? <Image className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
-                              Con adjunto
+                              <Paperclip className="w-4 h-4" />
+                              {docCount} archivo{docCount > 1 ? 's' : ''}
                             </span>
                           )}
                         </div>
                       </div>
                     </div>
-                    <Button variant="outline" onClick={() => setSelectedJustification(justification)}>
+                    <Button variant="outline" onClick={() => setSelectedJustification(justification)} className="flex-shrink-0">
                       <Eye className="w-4 h-4 mr-2" />Revisar
                     </Button>
                   </div>
@@ -321,11 +438,11 @@ export default function JustificationsPage() {
       )}
 
       {selectedJustification && (
-        <JustificationDetailModal 
-          justification={selectedJustification} 
-          onClose={() => setSelectedJustification(null)} 
-          onApprove={handleApprove} 
-          onReject={handleReject}
+        <JustificationDetailModal
+          justification={selectedJustification}
+          onClose={() => setSelectedJustification(null)}
+          onApprove={(comments) => approveMutation.mutate({ id: selectedJustification._id, comments })}
+          onReject={(comments) => rejectMutation.mutate({ id: selectedJustification._id, comments })}
           isLoading={approveMutation.isPending || rejectMutation.isPending}
         />
       )}
