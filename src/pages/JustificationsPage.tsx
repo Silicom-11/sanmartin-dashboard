@@ -73,9 +73,17 @@ function JustificationDetailModal({ justification, onClose }: {
   }
 
   const getDocUrl = (doc: JustificationDocument) => {
-    if (doc.url) return doc.url
-    // Fallback to API base + uploads path
     const baseUrl = (api.defaults.baseURL || '').replace('/api', '')
+    if (doc.url) {
+      // If relative proxy path, prepend backend base URL
+      if (doc.url.startsWith('/api/')) return `${baseUrl}${doc.url}`
+      // If direct URL (non-R2), use as-is
+      if (doc.url.startsWith('http') && !doc.url.includes('r2.cloudflarestorage.com')) return doc.url
+      // If direct R2 URL (requires auth), route through proxy via key
+      if (doc.key) return `${baseUrl}/api/uploads/r2/${doc.key}`
+      return doc.url
+    }
+    if (doc.key) return `${baseUrl}/api/uploads/r2/${doc.key}`
     return `${baseUrl}/uploads/justifications/${doc.name}`
   }
 
