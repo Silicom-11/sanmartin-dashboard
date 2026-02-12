@@ -142,13 +142,30 @@ function JustificationDetailModal({ justification, onClose }: {
                 <Paperclip className="w-4 h-4" /> Documentos Adjuntos ({justification.documents.length})
               </h4>
               <div className="grid grid-cols-2 gap-3">
-                {justification.documents.map((doc, i) => (
-                  <a
+                {justification.documents.map((doc, i) => {
+                  const docUrl = getDocUrl(doc)
+                  const handleDownload = async (e: React.MouseEvent) => {
+                    e.preventDefault()
+                    try {
+                      const response = await fetch(docUrl)
+                      const blob = await response.blob()
+                      const url = window.URL.createObjectURL(blob)
+                      const a = document.createElement('a')
+                      a.href = url
+                      a.download = doc.name || `documento-${i + 1}`
+                      document.body.appendChild(a)
+                      a.click()
+                      window.URL.revokeObjectURL(url)
+                      document.body.removeChild(a)
+                    } catch {
+                      window.open(docUrl, '_blank')
+                    }
+                  }
+                  return (
+                  <button
                     key={i}
-                    href={getDocUrl(doc)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border"
+                    onClick={handleDownload}
+                    className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border text-left"
                   >
                     {isImageDoc(doc) ? (
                       <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -166,8 +183,9 @@ function JustificationDetailModal({ justification, onClose }: {
                       </p>
                     </div>
                     <Download className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  </a>
-                ))}
+                  </button>
+                  )
+                })}
               </div>
             </div>
           )}
