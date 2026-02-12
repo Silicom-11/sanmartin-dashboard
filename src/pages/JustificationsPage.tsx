@@ -58,12 +58,9 @@ function StatCard({ title, value, icon: Icon, color }: { title: string; value: n
   )
 }
 
-function JustificationDetailModal({ justification, onClose, onApprove, onReject, isLoading }: {
+function JustificationDetailModal({ justification, onClose }: {
   justification: Justification
   onClose: () => void
-  onApprove: (comments: string) => void
-  onReject: (comments: string) => void
-  isLoading?: boolean
 }) {
   const [reviewComments, setReviewComments] = useState('')
   const config = statusConfig[justification.status]
@@ -205,45 +202,6 @@ function JustificationDetailModal({ justification, onClose, onApprove, onReject,
               )}
             </div>
           )}
-
-          {/* Review actions (if pending) */}
-          {justification.status === 'pending' && (
-            <div className="space-y-4 pt-4 border-t">
-              <div>
-                <label className="text-sm font-medium text-gray-700">Nota de Revisión (opcional)</label>
-                <Input
-                  value={reviewComments}
-                  onChange={(e) => setReviewComments(e.target.value)}
-                  placeholder="Añade una nota de revisión..."
-                  className="mt-1"
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1 border-red-500 text-red-600 hover:bg-red-50"
-                  onClick={() => onReject(reviewComments)}
-                  disabled={isLoading}
-                >
-                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <XCircle className="w-4 h-4 mr-2" />}
-                  Rechazar
-                </Button>
-                <Button
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                  onClick={() => onApprove(reviewComments)}
-                  disabled={isLoading}
-                >
-                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
-                  Aprobar
-                </Button>
-              </div>
-              <p className="text-xs text-gray-400 text-center">
-                <Shield className="w-3 h-3 inline mr-1" />
-                Al aprobar, la asistencia del alumno se actualizará automáticamente a "Justificado"
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -331,7 +289,7 @@ export default function JustificationsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Justificaciones</h1>
-          <p className="text-gray-500 mt-1">Revisión de solicitudes de justificación de inasistencias</p>
+          <p className="text-gray-500 mt-1">Registro de justificaciones de inasistencias presentadas por los padres</p>
         </div>
         <Button variant="outline"><Download className="w-4 h-4 mr-2" />Exportar</Button>
       </div>
@@ -348,7 +306,7 @@ export default function JustificationsPage() {
           <CardContent className="p-4 flex items-center gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600" />
             <span className="text-yellow-800">
-              Tienes <strong>{stats.pending}</strong> justificación{stats.pending !== 1 ? 'es' : ''} pendiente{stats.pending !== 1 ? 's' : ''} de revisión
+              Hay <strong>{stats.pending}</strong> justificación{stats.pending !== 1 ? 'es' : ''} pendiente{stats.pending !== 1 ? 's' : ''} de revisión desde la app
             </span>
           </CardContent>
         </Card>
@@ -427,7 +385,7 @@ export default function JustificationsPage() {
                       </div>
                     </div>
                     <Button variant="outline" onClick={() => setSelectedJustification(justification)} className="flex-shrink-0">
-                      <Eye className="w-4 h-4 mr-2" />Revisar
+                      <Eye className="w-4 h-4 mr-2" />Ver Detalle
                     </Button>
                   </div>
                 </CardContent>
@@ -441,9 +399,6 @@ export default function JustificationsPage() {
         <JustificationDetailModal
           justification={selectedJustification}
           onClose={() => setSelectedJustification(null)}
-          onApprove={(comments) => approveMutation.mutate({ id: selectedJustification._id, comments })}
-          onReject={(comments) => rejectMutation.mutate({ id: selectedJustification._id, comments })}
-          isLoading={approveMutation.isPending || rejectMutation.isPending}
         />
       )}
     </div>

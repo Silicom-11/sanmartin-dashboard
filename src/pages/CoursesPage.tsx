@@ -311,7 +311,11 @@ function CourseFormModal({ course, onClose, onSave, isLoading }: {
     queryKey: ['teachers-for-courses'],
     queryFn: async () => {
       const res = await teachersService.getAll({ limit: 100 })
-      return res.data?.teachers || res.data || []
+      // res = { success, data: [...teachers] } or { data: { teachers: [...] } }
+      if (Array.isArray(res.data)) return res.data
+      if (Array.isArray(res.data?.teachers)) return res.data.teachers
+      if (Array.isArray(res)) return res
+      return []
     },
   })
 
@@ -325,7 +329,11 @@ function CourseFormModal({ course, onClose, onSave, isLoading }: {
     queryKey: ['students-for-courses'],
     queryFn: async () => {
       const res = await studentsManagementService.getAll({ limit: 500 })
-      return res.data?.students || res.data || []
+      // res = { success, data: [...students], pagination }
+      if (Array.isArray(res.data)) return res.data
+      if (Array.isArray(res.data?.students)) return res.data.students
+      if (Array.isArray(res)) return res
+      return []
     },
   })
 
@@ -710,7 +718,11 @@ function CourseDetailModal({ courseId, onClose, onEdit, onDelete }: {
     queryFn: async () => {
       if (studentSearch.length < 2) return []
       const res = await studentsManagementService.getAll({ search: studentSearch, limit: 10 })
-      return res.data?.students || []
+      // res = { success, data: [...students], pagination }
+      if (Array.isArray(res.data)) return res.data
+      if (Array.isArray(res.data?.students)) return res.data.students
+      if (Array.isArray(res)) return res
+      return []
     },
     enabled: studentSearch.length >= 2,
   })
