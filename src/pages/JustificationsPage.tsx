@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Search, FileText, Clock, CheckCircle, XCircle, Eye, Download, Image, X, AlertCircle, Loader2, Paperclip, Calendar, Shield } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Search, FileText, Clock, CheckCircle, XCircle, Eye, Download, Image, X, AlertCircle, Paperclip, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useToast } from '@/hooks/use-toast'
 import api from '@/services/api'
 
 interface JustificationDocument {
@@ -62,7 +61,6 @@ function JustificationDetailModal({ justification, onClose }: {
   justification: Justification
   onClose: () => void
 }) {
-  const [reviewComments, setReviewComments] = useState('')
   const config = statusConfig[justification.status]
   const StatusIcon = config.icon
 
@@ -213,9 +211,6 @@ export default function JustificationsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
   const [selectedJustification, setSelectedJustification] = useState<Justification | null>(null)
 
-  const queryClient = useQueryClient()
-  const { toast } = useToast()
-
   // Fetch justifications
   const { data, isLoading } = useQuery({
     queryKey: ['justifications', statusFilter],
@@ -237,41 +232,6 @@ export default function JustificationsPage() {
   })
 
   const stats = statsData?.data || { total: 0, pending: 0, approved: 0, rejected: 0 }
-
-  // Approve mutation
-  const approveMutation = useMutation({
-    mutationFn: async ({ id, comments }: { id: string; comments: string }) => {
-      const response = await api.put(`/justifications/${id}/review`, { status: 'approved', comments })
-      return response.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['justifications'] })
-      queryClient.invalidateQueries({ queryKey: ['justifications-stats'] })
-      queryClient.invalidateQueries({ queryKey: ['attendance'] })
-      toast({ title: '✓ Justificación aprobada', description: 'La asistencia del alumno fue actualizada automáticamente a "Justificado"' })
-      setSelectedJustification(null)
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' })
-    },
-  })
-
-  // Reject mutation
-  const rejectMutation = useMutation({
-    mutationFn: async ({ id, comments }: { id: string; comments: string }) => {
-      const response = await api.put(`/justifications/${id}/review`, { status: 'rejected', comments })
-      return response.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['justifications'] })
-      queryClient.invalidateQueries({ queryKey: ['justifications-stats'] })
-      toast({ title: 'Justificación rechazada', description: 'La solicitud fue rechazada' })
-      setSelectedJustification(null)
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' })
-    },
-  })
 
   const justifications: Justification[] = (data?.data || []).filter((j: Justification) => {
     const studentName = `${j.student?.firstName || ''} ${j.student?.lastName || ''}`.toLowerCase()
