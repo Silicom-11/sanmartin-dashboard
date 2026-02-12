@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Calendar, Check, X, Clock, AlertTriangle, Users, FileText, Download, Eye, UserCheck, UserX, AlertCircle } from 'lucide-react'
+import { Search, Calendar, Check, X, Clock, AlertTriangle, Users, FileText, Download, Eye, UserCheck, UserX, AlertCircle, Paperclip, ExternalLink, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -8,9 +8,32 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import api from '@/services/api'
 
+interface JustificationDoc {
+  name: string
+  url: string | null
+  mimetype: string
+  size?: number
+  storage?: string
+}
+
+interface JustificationInfo {
+  justificationId: string
+  status: string
+  reason: string
+  observations: string | null
+  parentName: string | null
+  parentEmail?: string
+  parentPhone?: string
+  documents: JustificationDoc[]
+  documentCount: number
+  createdAt: string
+  reviewedAt?: string
+  reviewNote?: string
+}
+
 interface AttendanceRecord {
   _id: string
-  student: { firstName: string; lastName: string; enrollmentNumber: string }
+  student: { _id?: string; firstName: string; lastName: string; enrollmentNumber: string }
   status: 'present' | 'absent' | 'late' | 'justified'
   time?: string
   note?: string
@@ -67,6 +90,8 @@ function StatCard({ title, value, subtitle, icon: Icon, color, loading }: { titl
 }
 
 function AttendanceDetailModal({ course, onClose }: { course: CourseAttendance; onClose: () => void }) {
+  const [selectedJustification, setSelectedJustification] = useState<JustificationInfo | null>(null)
+
   // Cargar registros de asistencia detallados para este curso
   const { data: recordsData, isLoading: loadingRecords } = useQuery({
     queryKey: ['course-attendance-records', course._id, course.date],
@@ -76,7 +101,46 @@ function AttendanceDetailModal({ course, onClose }: { course: CourseAttendance; 
     },
   })
 
+  // Cargar justificaciones para esta fecha
+  const { data: justificationsData } = useQuery({
+    queryKey: ['justifications-for-date', course.date],
+    queryFn: async () => {
+      const response = await api.get('/justifications/for-date', { params: { date: course.date } })
+      return response.data.data as Record<string, JustificationInfo>
+    },
+  })
+
   const attendanceRecords = recordsData || []
+  const justificationsMap = justificationsData || {}
+
+  const getDocUrl = (doc: JustificationDoc) => {
+    if (doc.url) return doc.url
+    const baseUrl = (api.defaults.baseURL || '').replace('/api', '')
+    return `${baseUrl}/uploads/justifications/${doc.name}`
+  }
+
+  const isImageDoc = (doc: JustificationDoc) => {
+    return doc.mimetype?.startsWith('image') || doc.name?.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+  }
+
+  const getReasonLabel = (reason: string) => {
+    const reasonMap: Record<string, string> = {
+      illness: 'Enfermedad',
+      medical_appointment: 'Cita Médica',
+      family_emergency: 'Emergencia Familiar',
+      travel: 'Viaje',
+      other: 'Otro',
+    }
+    return reasonMap[reason] || reason
+  }
+
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case 'approved': return { label: 'Aprobada', bg: 'bg-green-100', text: 'text-green-700' }
+      case 'rejected': return { label: 'Rechazada', bg: 'bg-red-100', text: 'text-red-700' }
+      default: return { label: 'Pendiente', bg: 'bg-yellow-100', text: 'text-yellow-700' }
+    }
+  }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -164,10 +228,14 @@ function AttendanceDetailModal({ course, onClose }: { course: CourseAttendance; 
                     <th className="text-center p-3 font-medium text-gray-700">Estado</th>
                     <th className="text-center p-3 font-medium text-gray-700">Hora</th>
                     <th className="text-left p-3 font-medium text-gray-700">Observación</th>
+                    <th className="text-center p-3 font-medium text-gray-700">Justif.</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {attendanceRecords.map((record) => (
+                  {attendanceRecords.map((record) => {
+                    const studentId = record.student._id || record._id
+                    const justification = justificationsMap[studentId]
+                    return (
                     <tr key={record._id} className="border-b hover:bg-gray-50">
                       <td className="p-3">
                         <div className="flex items-center gap-3">
@@ -192,11 +260,131 @@ function AttendanceDetailModal({ course, onClose }: { course: CourseAttendance; 
                     <td className="p-3 text-gray-500 text-sm">
                       {record.note || '-'}
                     </td>
+                    <td className="p-3 text-center">
+                      {justification ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelectedJustification(justification); }}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors"
+                          title="Ver justificación"
+                        >
+                          <Eye className="w-4 h-4" />
+                          {justification.documentCount > 0 && (
+                            <span className="text-xs font-medium">{justification.documentCount}</span>
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                    )
+                  })}
               </tbody>
             </table>
           </div>
+          )}
+
+          {/* Justification Detail Panel */}
+          {selectedJustification && (
+            <div className="mt-6 border-t pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  Detalle de Justificación
+                </h3>
+                <button onClick={() => setSelectedJustification(null)} className="p-1 hover:bg-gray-100 rounded-lg">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-500 mb-1">Motivo</p>
+                  <p className="font-medium">{getReasonLabel(selectedJustification.reason)}</p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-500 mb-1">Estado</p>
+                  <Badge className={`${getStatusConfig(selectedJustification.status).bg} ${getStatusConfig(selectedJustification.status).text}`}>
+                    {getStatusConfig(selectedJustification.status).label}
+                  </Badge>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-500 mb-1">Padre / Apoderado</p>
+                  <p className="font-medium">{selectedJustification.parentName || 'No especificado'}</p>
+                  {selectedJustification.parentPhone && (
+                    <p className="text-xs text-gray-400 mt-0.5">{selectedJustification.parentPhone}</p>
+                  )}
+                </div>
+                <div className="p-3 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-500 mb-1">Fecha de envío</p>
+                  <p className="font-medium">
+                    {new Date(selectedJustification.createdAt).toLocaleDateString('es-PE', {
+                      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {selectedJustification.observations && (
+                <div className="p-3 bg-gray-50 rounded-xl mb-4">
+                  <p className="text-xs text-gray-500 mb-1">Observaciones del padre</p>
+                  <p className="text-sm">{selectedJustification.observations}</p>
+                </div>
+              )}
+
+              {selectedJustification.reviewNote && (
+                <div className="p-3 bg-amber-50 rounded-xl mb-4">
+                  <p className="text-xs text-amber-600 mb-1">Nota del revisor</p>
+                  <p className="text-sm">{selectedJustification.reviewNote}</p>
+                </div>
+              )}
+
+              {selectedJustification.documents.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                    <Paperclip className="w-4 h-4" />
+                    Documentos adjuntos ({selectedJustification.documents.length})
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedJustification.documents.map((doc, idx) => {
+                      const url = getDocUrl(doc)
+                      return (
+                        <div key={idx} className="border rounded-xl overflow-hidden">
+                          {isImageDoc(doc) && url ? (
+                            <div className="relative">
+                              <img
+                                src={url}
+                                alt={doc.name}
+                                className="w-full h-48 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => window.open(url, '_blank')}
+                              />
+                              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+                                <p className="text-xs text-white truncate">{doc.name}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-4 flex items-center gap-3">
+                              <div className="p-2 bg-gray-100 rounded-lg">
+                                <FileText className="w-5 h-5 text-gray-500" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{doc.name}</p>
+                                <p className="text-xs text-gray-400">{doc.mimetype}</p>
+                              </div>
+                              {url && (
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="p-1 hover:bg-gray-100 rounded">
+                                  <ExternalLink className="w-4 h-4 text-blue-500" />
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
